@@ -8,8 +8,10 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
   search, and jobs are grouped by customer; click a customer header to collapse or expand its jobs (or Collapse all); drag a customer group to reorder groups, or drag jobs within a group (the order is saved). Jobs can be archived (Active / Archived tabs, with Restore). Open a job's **Structure Tracker** (`/structures`) or **Procurement Order** (`/procurement`); the job's
   details show at the top of both pages and in the header of their printed PDFs. Each job has its own Titan data and
   its own procurement order — nothing is shared between jobs.
-- **Paste the Titan production sheet** (header row included) and every line is loaded. Each import replaces what is
-  in the tracker with the fresh copy (the old data is only removed after the new data has fully saved).
+- **Paste the Titan production sheet** (header row included). The first paste loads every line. After that, paste the
+  whole sheet again whenever Titan changes: lines are matched by Structure + Product + Description, only the ones whose
+  values changed are updated, new lines are added, and nothing is duplicated or deleted. A preview shows what will change
+  before you apply it. Lines no longer in Titan are kept unless you tick the box to remove them.
 - Shows exactly these columns: **Priority, Structure ID, Product, Description, Plant ID, Production Department, Scheduled Date,
   Ready Date, Pick Date, Weight, UOM** (Titan's `Pri`, `Structure`, `Product`, `Description`, `Plant ID`,
   `Production Dep`, `Sch_Date`, `Ready_Date`, `Pick Date`, `Wt.`, `UOM`).

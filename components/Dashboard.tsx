@@ -314,7 +314,7 @@ export default function Dashboard() {
   );
 
   const actions = (j: Job) => (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
+    <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
       <Link
         href={withJob("/structures", j.id)}
         onClick={() => rememberJob(j.id)}
@@ -541,18 +541,20 @@ export default function Dashboard() {
                           {j.customer || "—"}
                         </p>
                       </div>
-                      <div className="mt-auto">{actions(j)}</div>
+                      <div className="mt-auto [&>div]:justify-start">
+                        {actions(j)}
+                      </div>
                     </article>
                   ))}
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-b-xl border border-t-0 border-slate-200 bg-white shadow-sm">
-                  <table className="w-full text-left text-sm">
+                  <table className="w-full table-fixed text-left text-sm">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
-                        <th className="px-3 py-2">Job #</th>
-                        <th className="px-3 py-2">Job location</th>
-                        <th className="px-3 py-2">Customer</th>
+                        <th className="w-36 px-3 py-2">Job #</th>
+                        <th className="w-[24%] px-3 py-2">Job location</th>
+                        <th className="w-[16%] px-3 py-2">Customer</th>
                         <th className="px-3 py-2" />
                       </tr>
                     </thead>
