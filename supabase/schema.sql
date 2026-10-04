@@ -71,3 +71,37 @@ create index if not exists titan_lines_job_idx on public.titan_lines (job_id);
 
 -- Archive jobs from the Dashboard (safe to run again).
 alter table public.jobs add column if not exists archived boolean not null default false;
+
+-- Procurement orders and the component list are saved online, so every computer sees the same data
+-- (safe to run again). An order already built in one browser is moved here the first time that
+-- job's Procurement Order page is opened on that computer.
+create table if not exists public.procurement_orders (
+  job_id uuid primary key references public.jobs(id) on delete cascade,
+  po_number text,
+  vendor text,
+  notes text,
+  lines jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.procurement_orders enable row level security;
+drop policy if exists "authenticated full access" on public.procurement_orders;
+create policy "authenticated full access"
+on public.procurement_orders
+for all
+to authenticated
+using (true)
+with check (true);
+
+create table if not exists public.procurement_catalog (
+  id text primary key,
+  items jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.procurement_catalog enable row level security;
+drop policy if exists "authenticated full access" on public.procurement_catalog;
+create policy "authenticated full access"
+on public.procurement_catalog
+for all
+to authenticated
+using (true)
+with check (true);

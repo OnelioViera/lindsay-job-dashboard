@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getSupabase } from "@/lib/supabase";
 import { CATALOG } from "@/lib/catalog";
 import JobBanner from "./JobBanner";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
@@ -32,6 +33,14 @@ const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const STORE = "procurement-extras";
 const CAT_STORE = "procurement-catalog";
+
+// The order (per job) and the component list are saved in Supabase, so every computer sees the same data.
+async function pushCatalogRemote(items: CatItem[]): Promise<string | null> {
+  const { error } = await getSupabase()
+    .from("procurement_catalog")
+    .upsert({ id: "main", items, updated_at: new Date().toISOString() });
+  return error ? error.message : null;
+}
 
 const seedCatalog = (): CatItem[] =>
   CATALOG.map((c, i) => ({ ...c, id: `seed-${i}` }));
@@ -64,44 +73,144 @@ export default function Procurement() {
   const jobId = job?.id ?? null;
   const storeKey = `${STORE}:${jobId ?? "none"}`;
 
-  useEffect(() => {
-    if (jobLoading) return;
-    setExtras([]);
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const dirty = useRef(false); // unsaved local changes to this job's order
+  const loadedFor = useRef<string | null>(null);
+
+  const failText = (m: string) =>
+    /procurement_|relation|does not exist/i.test(m)
+      ? `${m} — run the updated supabase/schema.sql in Supabase first.`
+      : m;
+
+  const loadOrder = useCallback(async () => {
+    if (!jobId) return;
+    const { data, error } = await getSupabase()
+      .from("procurement_orders")
+      .select("po_number, vendor, notes, lines")
+      .eq("job_id", jobId)
+      .maybeSingle();
+    if (error) {
+      setSyncError(failText(error.message));
+      return;
+    }
+    setSyncError(null);
+    loadedFor.current = jobId;
+    if (data) {
+      dirty.current = false;
+      setPoNumber(data.po_number ?? "");
+      setVendor(data.vendor ?? "");
+      setNotes(data.notes ?? "");
+      setExtras((data.lines ?? []) as Extra[]);
+      return;
+    }
+    // Nothing saved online yet: move over an order saved earlier in this browser.
     try {
       const v = localStorage.getItem(storeKey);
       if (v) {
         const saved = JSON.parse(v) as (Extra & { catalogIdx?: number })[];
-        setExtras(
-          saved.map((e) =>
-            e.name !== undefined
-              ? e
-              : {
-                  ...e,
-                  ...CATALOG[e.catalogIdx ?? 0],
-                },
-          ),
+        const lines = saved.map((e) =>
+          e.name !== undefined ? e : { ...e, ...CATALOG[e.catalogIdx ?? 0] },
         );
+        if (lines.length > 0) {
+          dirty.current = true;
+          setExtras(lines);
+        }
       }
     } catch {}
-  }, [storeKey, jobLoading]);
+  }, [jobId, storeKey]);
 
   useEffect(() => {
+    if (jobLoading) return;
+    loadedFor.current = null;
+    dirty.current = false;
+    setExtras([]);
+    setPoNumber("");
+    setVendor("");
+    setNotes("");
+    setSaveState("idle");
+    void loadOrder();
+  }, [jobLoading, loadOrder]);
+
+  // Save the order a moment after any change.
+  useEffect(() => {
+    if (!dirty.current || !jobId || loadedFor.current !== jobId) return;
+    setSaveState("saving");
+    const t = setTimeout(async () => {
+      const { error } = await getSupabase().from("procurement_orders").upsert({
+        job_id: jobId,
+        po_number: poNumber,
+        vendor,
+        notes,
+        lines: extras,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) {
+        setSaveState("error");
+        setSyncError(failText(error.message));
+      } else {
+        dirty.current = false;
+        setSaveState("saved");
+        setSyncError(null);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [extras, poNumber, vendor, notes, jobId]);
+
+  // Coming back to this tab (e.g. from another computer's changes): load the latest.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible" && !dirty.current)
+        void loadOrder();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [loadOrder]);
+
+  const loadCatalog = useCallback(async () => {
+    const { data, error } = await getSupabase()
+      .from("procurement_catalog")
+      .select("items")
+      .eq("id", "main")
+      .maybeSingle();
+    if (error) {
+      setSyncError(failText(error.message));
+      return;
+    }
+    if (data?.items) {
+      setCatalog(data.items as CatItem[]);
+      return;
+    }
+    // Nothing saved online yet: move over a list edited earlier in this browser.
     try {
       const c = localStorage.getItem(CAT_STORE);
-      if (c) setCatalog(JSON.parse(c));
+      if (c) {
+        const items = JSON.parse(c) as CatItem[];
+        setCatalog(items);
+        const m = await pushCatalogRemote(items);
+        if (m) setSyncError(failText(m));
+      }
     } catch {}
   }, []);
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
   const saveExtras = (next: Extra[]) => {
+    dirty.current = true;
     setExtras(next);
-    try {
-      localStorage.setItem(storeKey, JSON.stringify(next));
-    } catch {}
   };
   const saveCatalog = (next: CatItem[]) => {
     setCatalog(next);
-    try {
-      localStorage.setItem(CAT_STORE, JSON.stringify(next));
-    } catch {}
+    void pushCatalogRemote(next).then((m) => {
+      if (m) setSyncError(failText(m));
+    });
   };
   const addExtra = () => {
     const item = catalog.find((c) => c.id === pick);
@@ -269,12 +378,30 @@ export default function Procurement() {
 
       <JobBanner job={job} loading={jobLoading} />
 
+      {syncError && (
+        <div className="mb-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 print:hidden">
+          {syncError}
+        </div>
+      )}
+      <p className="mb-2 text-right text-xs text-slate-500 print:hidden">
+        {saveState === "saving"
+          ? "Saving…"
+          : saveState === "saved"
+            ? "Saved — available on every computer"
+            : saveState === "error"
+              ? "Not saved"
+              : ""}
+      </p>
+
       <section className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3 print:hidden">
         <label className="text-sm">
           <span className="font-medium text-navy">PO number</span>
           <input
             value={poNumber}
-            onChange={(e) => setPoNumber(e.target.value)}
+            onChange={(e) => {
+              dirty.current = true;
+              setPoNumber(e.target.value);
+            }}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
@@ -282,7 +409,10 @@ export default function Procurement() {
           <span className="font-medium text-navy">Vendor</span>
           <input
             value={vendor}
-            onChange={(e) => setVendor(e.target.value)}
+            onChange={(e) => {
+              dirty.current = true;
+              setVendor(e.target.value);
+            }}
             placeholder="e.g. Deeter"
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
           />
@@ -291,7 +421,10 @@ export default function Procurement() {
           <span className="font-medium text-navy">Notes</span>
           <input
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => {
+              dirty.current = true;
+              setNotes(e.target.value);
+            }}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </label>
