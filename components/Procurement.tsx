@@ -137,6 +137,24 @@ export default function Procurement() {
     if (i < 0 || j < 0 || j >= extras.length) return;
     moveExtra(id, extras[j].id);
   };
+  // Reorder the component list (also the order of the dropdown).
+  const [dragCat, setDragCat] = useState<string | null>(null);
+  const [overCat, setOverCat] = useState<string | null>(null);
+  const moveCat = (id: string, toId: string) => {
+    const from = catalog.findIndex((c) => c.id === id);
+    const to = catalog.findIndex((c) => c.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...catalog];
+    const [m] = next.splice(from, 1);
+    next.splice(to, 0, m);
+    saveCatalog(next);
+  };
+  const nudgeCat = (id: string, dir: -1 | 1) => {
+    const i = catalog.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= catalog.length) return;
+    moveCat(id, catalog[j].id);
+  };
   const patchExtra = (id: string, patch: Partial<Extra>) =>
     saveExtras(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 
@@ -309,6 +327,7 @@ export default function Procurement() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-100 text-left">
                   <tr>
+                    <th className="w-20 px-2 py-1.5" />
                     <th className="px-2 py-1.5">Type</th>
                     <th className="px-2 py-1.5">Name</th>
                     <th className="px-2 py-1.5">Cost</th>
@@ -317,9 +336,71 @@ export default function Procurement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {catalog.map((c) =>
-                    editId === c.id ? (
-                      <tr key={c.id} className="border-t border-slate-200">
+                  {catalog.map((c, idx) => {
+                    const handle = (
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        <span
+                          draggable
+                          title="Drag to reorder"
+                          onDragStart={(ev) => {
+                            ev.dataTransfer.effectAllowed = "move";
+                            ev.dataTransfer.setData("text/plain", c.id);
+                            const tr = (
+                              ev.currentTarget as HTMLElement
+                            ).closest("tr");
+                            if (tr) ev.dataTransfer.setDragImage(tr, 0, 0);
+                            setDragCat(c.id);
+                          }}
+                          onDragEnd={() => {
+                            setDragCat(null);
+                            setOverCat(null);
+                          }}
+                          className="cursor-grab px-1 text-slate-400 select-none active:cursor-grabbing"
+                          aria-hidden
+                        >
+                          ⋮⋮
+                        </span>
+                        <button
+                          onClick={() => nudgeCat(c.id, -1)}
+                          disabled={idx === 0}
+                          aria-label="Move up"
+                          className="px-0.5 text-xs text-navy disabled:opacity-25"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => nudgeCat(c.id, 1)}
+                          disabled={idx === catalog.length - 1}
+                          aria-label="Move down"
+                          className="px-0.5 text-xs text-navy disabled:opacity-25"
+                        >
+                          ▼
+                        </button>
+                      </td>
+                    );
+                    const rowProps = {
+                      onDragOver: (ev: React.DragEvent) => {
+                        if (!dragCat) return;
+                        ev.preventDefault();
+                        if (overCat !== c.id) setOverCat(c.id);
+                      },
+                      onDrop: (ev: React.DragEvent) => {
+                        ev.preventDefault();
+                        if (dragCat) moveCat(dragCat, c.id);
+                        setDragCat(null);
+                        setOverCat(null);
+                      },
+                      className: `border-t border-slate-200 ${
+                        dragCat === c.id
+                          ? "opacity-40"
+                          : overCat === c.id && dragCat
+                            ? "bg-slate-100 outline-2 outline-navy"
+                            : ""
+                      }`,
+                    };
+                    return editId === c.id ? (
+                      <tr key={c.id} {...rowProps}>
+                        {handle}
                         <td className="px-2 py-1">
                           <input
                             value={edit.type}
@@ -375,7 +456,8 @@ export default function Procurement() {
                         </td>
                       </tr>
                     ) : (
-                      <tr key={c.id} className="border-t border-slate-200">
+                      <tr key={c.id} {...rowProps}>
+                        {handle}
                         <td className="px-2 py-1.5">{c.type}</td>
                         <td className="px-2 py-1.5">{c.name}</td>
                         <td className="px-2 py-1.5">{money(c.cost)}</td>
@@ -395,9 +477,10 @@ export default function Procurement() {
                           </button>
                         </td>
                       </tr>
-                    ),
-                  )}
+                    );
+                  })}
                   <tr className="border-t-2 border-slate-300 bg-slate-50">
+                    <td />
                     <td className="px-2 py-1">
                       <input
                         value={draft.type}
