@@ -103,7 +103,11 @@ export default function Procurement() {
       setPoNumber(data.po_number ?? "");
       setVendor(data.vendor ?? "");
       setNotes(data.notes ?? "");
-      setExtras((data.lines ?? []) as Extra[]);
+      // Keep the same array when nothing changed, so the page doesn't re-render needlessly.
+      const lines = (data.lines ?? []) as Extra[];
+      setExtras((cur) =>
+        JSON.stringify(cur) === JSON.stringify(lines) ? cur : lines,
+      );
       return;
     }
     // Nothing saved online yet: move over an order saved earlier in this browser.
@@ -161,13 +165,21 @@ export default function Procurement() {
 
   // Coming back to this tab (e.g. from another computer's changes): load the latest.
   useEffect(() => {
+    // Never refresh while the print window is open: it can stall Chrome's print preview.
+    let printing = false;
+    const before = () => (printing = true);
+    const after = () => setTimeout(() => (printing = false), 1500);
     const refresh = () => {
-      if (document.visibilityState === "visible" && !dirty.current)
+      if (!printing && document.visibilityState === "visible" && !dirty.current)
         void loadOrder();
     };
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
     document.addEventListener("visibilitychange", refresh);
     window.addEventListener("focus", refresh);
     return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
       document.removeEventListener("visibilitychange", refresh);
       window.removeEventListener("focus", refresh);
     };
