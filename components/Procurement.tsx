@@ -119,6 +119,24 @@ export default function Procurement() {
     setPickQty(1);
     setPickStructure("");
   };
+  // Reorder order lines: drag the ⋮⋮ handle, or use the ▲ ▼ buttons.
+  const [dragExtra, setDragExtra] = useState<string | null>(null);
+  const [overExtra, setOverExtra] = useState<string | null>(null);
+  const moveExtra = (id: string, toId: string) => {
+    const from = extras.findIndex((e) => e.id === id);
+    const to = extras.findIndex((e) => e.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...extras];
+    const [m] = next.splice(from, 1);
+    next.splice(to, 0, m);
+    saveExtras(next);
+  };
+  const nudgeExtra = (id: string, dir: -1 | 1) => {
+    const i = extras.findIndex((e) => e.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= extras.length) return;
+    moveExtra(id, extras[j].id);
+  };
   const patchExtra = (id: string, patch: Partial<Extra>) =>
     saveExtras(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 
@@ -465,6 +483,7 @@ export default function Procurement() {
           <table className="w-full border-collapse text-sm">
             <thead className="bg-navy text-left text-white">
               <tr>
+                <th className="w-16 px-2 py-2 print:hidden" />
                 <th className="px-3 py-2">Item</th>
                 <th className="px-3 py-2">Structure / job</th>
                 <th className="px-3 py-2 text-right">Qty</th>
@@ -475,8 +494,67 @@ export default function Procurement() {
               </tr>
             </thead>
             <tbody>
-              {extraRows.map((e) => (
-                <tr key={e.id} className="border-b border-slate-200">
+              {extraRows.map((e, idx) => (
+                <tr
+                  key={e.id}
+                  onDragOver={(ev) => {
+                    if (!dragExtra) return;
+                    ev.preventDefault();
+                    if (overExtra !== e.id) setOverExtra(e.id);
+                  }}
+                  onDrop={(ev) => {
+                    ev.preventDefault();
+                    if (dragExtra) moveExtra(dragExtra, e.id);
+                    setDragExtra(null);
+                    setOverExtra(null);
+                  }}
+                  className={`border-b border-slate-200 ${
+                    dragExtra === e.id
+                      ? "opacity-40"
+                      : overExtra === e.id && dragExtra
+                        ? "bg-slate-100 outline-2 outline-navy"
+                        : ""
+                  }`}
+                >
+                  <td className="px-2 py-1.5 whitespace-nowrap print:hidden">
+                    <span
+                      draggable
+                      title="Drag to reorder"
+                      onDragStart={(ev) => {
+                        ev.dataTransfer.effectAllowed = "move";
+                        ev.dataTransfer.setData("text/plain", e.id);
+                        const tr = (ev.currentTarget as HTMLElement).closest(
+                          "tr",
+                        );
+                        if (tr) ev.dataTransfer.setDragImage(tr, 0, 0);
+                        setDragExtra(e.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragExtra(null);
+                        setOverExtra(null);
+                      }}
+                      className="cursor-grab px-1 text-slate-400 select-none active:cursor-grabbing"
+                      aria-hidden
+                    >
+                      ⋮⋮
+                    </span>
+                    <button
+                      onClick={() => nudgeExtra(e.id, -1)}
+                      disabled={idx === 0}
+                      aria-label="Move up"
+                      className="px-0.5 text-xs text-navy disabled:opacity-25"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      onClick={() => nudgeExtra(e.id, 1)}
+                      disabled={idx === extraRows.length - 1}
+                      aria-label="Move down"
+                      className="px-0.5 text-xs text-navy disabled:opacity-25"
+                    >
+                      ▼
+                    </button>
+                  </td>
                   <td className="px-3 py-1.5">
                     {e.type} {e.name}
                   </td>
@@ -534,6 +612,7 @@ export default function Procurement() {
                 </tr>
               ))}
               <tr className="font-semibold">
+                <td className="print:hidden" />
                 <td className="px-3 py-2" colSpan={4}>
                   Total
                 </td>

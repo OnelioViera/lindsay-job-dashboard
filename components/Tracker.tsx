@@ -7,6 +7,9 @@ import Link from "next/link";
 import ImportModal from "./ImportModal";
 import JobBanner from "./JobBanner";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
+import { analyze, QUICK_LABELS, type QuickKey } from "@/lib/metrics";
+
+const QUICK_KEYS = Object.keys(QUICK_LABELS) as QuickKey[];
 
 type SortKey =
   "paste" | "priority" | "structure" | "sch_date" | "ready_date" | "pick_date";
@@ -117,6 +120,12 @@ export default function Tracker() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // "Needs to be scheduled": structures with no Scheduled Date on any line.
   const [needsPour, setNeedsPour] = useState(false);
+  // Opened from a Dashboard metrics chip (?show=…): only structures in that group.
+  const [quick, setQuick] = useState<QuickKey | null>(null);
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get("show");
+    if (s && (QUICK_KEYS as string[]).includes(s)) setQuick(s as QuickKey);
+  }, []);
   // Structures picked for the scheduler; when set, only these are shown.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -182,6 +191,8 @@ export default function Tracker() {
     return new Set([...has.entries()].filter(([, v]) => !v).map(([k]) => k));
   }, [rows]);
 
+  const quickSets = useMemo(() => analyze(rows).sets, [rows]);
+
   const counts = useMemo(() => {
     const out = {} as Record<FilterKey, number>;
     for (const f of FILTERS) out[f.key] = rows.filter(f.test).length;
@@ -214,6 +225,7 @@ export default function Tracker() {
     return rows
       .filter((r) => (needsPour ? neverScheduled.has(r.structure) : true))
       .filter((r) => (picked ? picked.has(r.structure) : true))
+      .filter((r) => (quick ? quickSets[quick].has(r.structure) : true))
       .filter((r) => (inRange ? inRange.has(r.structure) : true))
       .filter((r) => (tests.length === 0 ? true : tests.some((f) => f.test(r))))
       .filter((r) =>
@@ -235,6 +247,8 @@ export default function Tracker() {
     needsPour,
     neverScheduled,
     picked,
+    quick,
+    quickSets,
   ]);
 
   const groups = useMemo<Group[]>(() => {
@@ -433,6 +447,7 @@ export default function Tracker() {
             {rangeLabel ? ` · ${rangeLabel}` : ""}
             {needsPour ? " · Structures never scheduled to pour" : ""}
             {picked ? " · Selected structures only" : ""}
+            {quick ? ` · ${QUICK_LABELS[quick]}` : ""}
           </p>
         </div>
         <div className="text-right text-xs text-slate-700">
@@ -489,6 +504,18 @@ export default function Tracker() {
               </button>
             );
           })}
+          {quick && (
+            <span className="inline-flex items-center gap-2 rounded-full border-2 border-navy bg-navy px-4 py-1.5 text-sm font-semibold text-white">
+              {QUICK_LABELS[quick]} ({quickSets[quick].size})
+              <button
+                onClick={() => setQuick(null)}
+                aria-label="Clear dashboard filter"
+                className="text-white/80 hover:text-white"
+              >
+                ✕
+              </button>
+            </span>
+          )}
           {active.size > 0 && (
             <button
               onClick={() => setActive(new Set())}

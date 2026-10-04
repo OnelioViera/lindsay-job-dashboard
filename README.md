@@ -8,6 +8,11 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
   search, and jobs are grouped by customer; click a customer header to collapse or expand its jobs (or Collapse all); drag a customer group to reorder groups, or drag jobs within a group (the order is saved). Jobs can be archived (Active / Archived tabs, with Restore). Open a job's **Structure Tracker** (`/structures`) or **Procurement Order** (`/procurement`); the job's
   details show at the top of both pages and in the header of their printed PDFs. Each job has its own Titan data and
   its own procurement order — nothing is shared between jobs.
+- **Job metrics**: each card/row has a **Metrics** button that opens a panel on the right side of the screen (the dashboard
+  stays centered). It shows, counting structures: not scheduled to pour, scheduled to pour (any line has a Scheduled Date),
+  Ready Date and Pick Date (count + next upcoming date), a progress bar, and overdue flags (pour date passed with no Ready
+  Date; Ready Date passed with no Pick Date). Click a number to open those structures in the Structure Tracker. Works for
+  archived jobs too. Numbers reflect the last Titan paste.
 - **Paste the Titan production sheet** (header row included). The first paste loads every line. After that, paste the
   whole sheet again whenever Titan changes: lines are matched by Structure + Product + Description, only the ones whose
   values changed are updated, new lines are added, and nothing is duplicated or deleted. A preview shows what will change
@@ -34,7 +39,7 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
 - **Procurement order** (button in the header → `/procurement`): add PO number / vendor / notes, then Print / Save PDF.
   **Add Components**: pick a component from the dropdown with a quantity (and optional structure/job). "Edit component
   list" lets you add, edit and delete components (type, name, cost, weight; starts from `lib/catalog.ts`). Order lines
-  can be edited in place (structure, qty, unit cost) or removed. The component list and order are remembered in this
+  can be edited in place (structure, qty, unit cost), removed, or reordered (drag the ⋮⋮ handle or use ▲ ▼; the order carries into the PDF). The component list and order are remembered in this
   browser.
 - **Print / Save PDF** of exactly what's on screen (landscape, logo header, active filters listed).
 

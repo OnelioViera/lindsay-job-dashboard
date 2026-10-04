@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { rememberJob, withJob, type Job } from "@/lib/jobs";
+import {
+  analyze,
+  fmtShort,
+  type JobMetrics,
+  type MetricLine,
+  type QuickKey,
+} from "@/lib/metrics";
+
+const PAGE = 1000;
 
 type View = "cards" | "rows";
 const VIEW_KEY = "jobs-view";
@@ -78,6 +87,57 @@ export default function Dashboard() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Per-job metrics (structure counts), from the lines saved for each job.
+  const [metrics, setMetrics] = useState<Record<string, JobMetrics>>({});
+  const [metricsJobId, setMetricsJobId] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      setMetricsJobId(localStorage.getItem("metrics-job-id"));
+    } catch {}
+  }, []);
+  const openMetrics = (id: string | null) => {
+    setMetricsJobId(id);
+    try {
+      if (id) localStorage.setItem("metrics-job-id", id);
+      else localStorage.removeItem("metrics-job-id");
+    } catch {}
+  };
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const byJob = new Map<string, MetricLine[]>();
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await getSupabase()
+          .from("titan_lines")
+          .select("job_id, structure, sch_date, ready_date, pick_date")
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (cancelled) return;
+        if (error) {
+          setMetricsError(error.message);
+          return;
+        }
+        for (const r of (data ?? []) as (MetricLine & {
+          job_id: string | null;
+        })[]) {
+          if (!r.job_id) continue;
+          const list = byJob.get(r.job_id) ?? [];
+          list.push(r);
+          byJob.set(r.job_id, list);
+        }
+        if (!data || data.length < PAGE) break;
+      }
+      const out: Record<string, JobMetrics> = {};
+      for (const [id, lines] of byJob) out[id] = analyze(lines);
+      setMetrics(out);
+      setMetricsError(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const save = async () => {
     if (!form.job_number.trim()) return;
@@ -315,6 +375,17 @@ export default function Dashboard() {
 
   const actions = (j: Job) => (
     <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
+      <button
+        onClick={() => openMetrics(metricsJobId === j.id ? null : j.id)}
+        aria-pressed={metricsJobId === j.id}
+        className={`rounded-md border border-navy px-3 py-1.5 font-semibold ${
+          metricsJobId === j.id
+            ? "bg-navy text-white"
+            : "bg-white text-navy hover:bg-slate-50"
+        }`}
+      >
+        Metrics
+      </button>
       <Link
         href={withJob("/structures", j.id)}
         onClick={() => rememberJob(j.id)}
@@ -350,11 +421,164 @@ export default function Dashboard() {
     </div>
   );
 
+  const metricsJob = jobs.find((j) => j.id === metricsJobId) ?? null;
+
+  // Fixed to the right edge so the dashboard itself stays centered.
+  const MetricsPanel = () => {
+    if (!metricsJob) return null;
+    const m = metrics[metricsJob.id];
+    const link = (key: QuickKey) =>
+      `${withJob("/structures", metricsJob.id)}&show=${key}`;
+
+    const chip = (
+      key: QuickKey,
+      label: string,
+      note: string | null,
+      tone: "red" | "navy" | "green",
+    ) => {
+      const count = m.sets[key].size;
+      const color =
+        tone === "red"
+          ? "border-brand-red text-brand-red hover:bg-red-50"
+          : tone === "green"
+            ? "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+            : "border-navy text-navy hover:bg-slate-50";
+      return (
+        <Link
+          key={key}
+          href={link(key)}
+          onClick={() => rememberJob(metricsJob.id)}
+          title={`Open these ${count} structure${count === 1 ? "" : "s"} in the Structure Tracker`}
+          className={`flex items-center justify-between rounded-lg border-2 bg-white px-3 py-2 ${color}`}
+        >
+          <span className="text-sm font-semibold">{label}</span>
+          <span className="text-right">
+            <span className="text-xl font-bold">{count}</span>
+            {note && (
+              <span className="block text-xs text-slate-600">{note}</span>
+            )}
+          </span>
+        </Link>
+      );
+    };
+
+    let body: React.ReactNode;
+    if (!m) {
+      body = (
+        <p className="text-sm text-slate-600">
+          {metricsError
+            ? metricsError
+            : "No Titan data for this job yet. Open its Structure Tracker and paste the Titan sheet."}
+        </p>
+      );
+    } else {
+      const { sets } = m;
+      let schedOnly = 0;
+      for (const s of sets.scheduled)
+        if (!sets.ready.has(s) && !sets.picked.has(s)) schedOnly++;
+      let readyOnly = 0;
+      for (const s of sets.ready) if (!sets.picked.has(s)) readyOnly++;
+      const segs = [
+        { n: sets.notScheduled.size, c: "bg-brand-red", t: "Not scheduled" },
+        { n: schedOnly, c: "bg-navy/60", t: "Scheduled to pour" },
+        { n: readyOnly, c: "bg-amber-400", t: "Ready" },
+        { n: sets.picked.size, c: "bg-emerald-600", t: "Pick date set" },
+      ];
+      body = (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            {m.total} structure{m.total === 1 ? "" : "s"} in this job
+          </p>
+          <div>
+            <div className="flex h-3 overflow-hidden rounded-full bg-slate-200">
+              {segs.map((s) => (
+                <div
+                  key={s.t}
+                  title={`${s.t}: ${s.n}`}
+                  className={s.c}
+                  style={{ width: `${(s.n / Math.max(m.total, 1)) * 100}%` }}
+                />
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-600">
+              {segs.map((s) => (
+                <span key={s.t} className="inline-flex items-center gap-1">
+                  <span className={`h-2 w-2 rounded-full ${s.c}`} />
+                  {s.t}
+                </span>
+              ))}
+            </div>
+          </div>
+          {chip("notScheduled", "Not scheduled to pour", null, "red")}
+          {chip("scheduled", "Scheduled to pour", null, "navy")}
+          {chip(
+            "ready",
+            "Ready Date",
+            m.nextReady ? `next ${fmtShort(m.nextReady)}` : "none upcoming",
+            "navy",
+          )}
+          {chip(
+            "picked",
+            "Pick Date",
+            m.nextPick ? `next ${fmtShort(m.nextPick)}` : "none upcoming",
+            "green",
+          )}
+          {(sets.pourOverdue.size > 0 || sets.readyOverdue.size > 0) && (
+            <div className="space-y-2 border-t border-slate-200 pt-3">
+              <p className="text-xs font-semibold tracking-wide text-brand-red uppercase">
+                Overdue
+              </p>
+              {sets.pourOverdue.size > 0 &&
+                chip("pourOverdue", "Pour date passed, not ready", null, "red")}
+              {sets.readyOverdue.size > 0 &&
+                chip(
+                  "readyOverdue",
+                  "Ready date passed, not picked",
+                  null,
+                  "red",
+                )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <aside className="fixed top-0 right-0 z-40 flex h-full w-80 flex-col border-l border-slate-200 bg-slate-50 shadow-xl sm:w-96 print:hidden">
+        <div className="flex items-start gap-2 bg-navy p-4 text-white">
+          <div className="flex-1">
+            <p className="text-xs tracking-wide text-white/70 uppercase">
+              Job metrics
+            </p>
+            <p className="text-lg font-bold">Job #{metricsJob.job_number}</p>
+            <p className="text-sm text-white/80">
+              {[metricsJob.location, metricsJob.customer]
+                .filter(Boolean)
+                .join(" · ") || "—"}
+            </p>
+          </div>
+          <button
+            onClick={() => openMetrics(null)}
+            aria-label="Close metrics"
+            className="rounded px-2 text-xl leading-none text-white/80 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">{body}</div>
+        <p className="border-t border-slate-200 p-3 text-xs text-slate-500">
+          Counts are structures (a structure counts once). Based on the last
+          Titan paste. Click a number to open those structures in the tracker.
+        </p>
+      </aside>
+    );
+  };
+
   const field =
     "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20";
 
   return (
-    <main className="mx-auto max-w-6xl p-4">
+    <main className="mx-auto max-w-7xl px-6 py-4 sm:px-10">
       <header className="mb-5 flex flex-wrap items-center gap-4">
         <img src="/logo.png" alt="Lindsay Precast" className="h-20 w-auto" />
         <div className="flex-1">
@@ -552,9 +776,9 @@ export default function Dashboard() {
                   <table className="w-full table-fixed text-left text-sm">
                     <thead className="bg-slate-100 text-slate-700">
                       <tr>
-                        <th className="w-36 px-3 py-2">Job #</th>
-                        <th className="w-[24%] px-3 py-2">Job location</th>
-                        <th className="w-[16%] px-3 py-2">Customer</th>
+                        <th className="w-32 px-3 py-2">Job #</th>
+                        <th className="w-[20%] px-3 py-2">Job location</th>
+                        <th className="w-[13%] px-3 py-2">Customer</th>
                         <th className="px-3 py-2" />
                       </tr>
                     </thead>
@@ -575,7 +799,9 @@ export default function Dashboard() {
                           </td>
                           <td className="px-3 py-2">{j.location || "—"}</td>
                           <td className="px-3 py-2">{j.customer || "—"}</td>
-                          <td className="px-3 py-2">{actions(j)}</td>
+                          <td className="px-3 py-2 [&>div]:flex-nowrap [&>div]:whitespace-nowrap">
+                            {actions(j)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -586,6 +812,7 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+      {MetricsPanel()}
     </main>
   );
 }
