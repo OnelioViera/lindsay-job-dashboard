@@ -16,8 +16,8 @@ body {
 }
 
 @page {
-  size: letter landscape;
-  margin: 0.5in;
+  size: letter portrait;
+  margin: 0.4in;
 }
 
 @media print {

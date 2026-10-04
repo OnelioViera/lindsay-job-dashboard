@@ -715,7 +715,7 @@ export default function Tracker() {
 
       {/* Table */}
       <section className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
-        <table className="w-full text-left text-sm print:text-[10px]">
+        <table className="w-full text-left text-sm print:w-full print:text-[8px] print:leading-tight">
           <thead className="sticky top-0 z-10 bg-navy text-white print:static">
             <tr>
               <th className="w-8 px-2 py-2 print:hidden">
@@ -823,7 +823,7 @@ export default function Tracker() {
                     <td className="px-2 py-2 text-slate-600 print:px-1.5">
                       {r.priority ?? ""}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {isHeader ? (
                         <button
                           type="button"
@@ -853,25 +853,25 @@ export default function Tracker() {
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-xs whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 text-xs whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {r.product}
                     </td>
-                    <td className="min-w-56 px-2 py-2 print:px-1.5">
+                    <td className="min-w-56 px-2 py-2 print:min-w-0 print:px-1.5">
                       {r.description}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {r.plant_id}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {r.production_dep}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {fmtDate(r.sch_date)}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {fmtDate(r.ready_date)}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {fmtDate(r.pick_date)}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums print:px-1.5">

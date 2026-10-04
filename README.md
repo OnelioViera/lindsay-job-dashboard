@@ -41,7 +41,7 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
   list" lets you add, edit, delete and reorder components (drag ⋮⋮ or ▲ ▼; the dropdown follows the same order). Saving an edit also updates the matching lines in the order that is open (name, type, cost, weight; qty and structure are kept). Other jobs' orders are not touched (type, name, cost, weight; starts from `lib/catalog.ts`). Order lines
   can be edited in place (structure, qty, unit cost), removed, or reordered (drag the ⋮⋮ handle or use ▲ ▼; the order carries into the PDF). The component list and each job's order (PO number, vendor, notes, lines) are saved in Supabase, so they show up on every computer.
   Run the updated `supabase/schema.sql` once to create the two tables; anything saved earlier in a browser moves over the first time it's opened.
-- **Print / Save PDF** of exactly what's on screen (landscape, logo header, active filters listed).
+- **Print / Save PDF** of exactly what's on screen (portrait, scaled to fit, every column shown, logo header, active filters listed).
 
 ## Setup
 
