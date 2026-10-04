@@ -38,7 +38,7 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
   "Delete all". Everything asks for confirmation; Delete all requires typing DELETE.
 - **Procurement order** (button in the header → `/procurement`): add PO number / vendor / notes, then Print / Save PDF.
   **Add Components**: pick a component from the dropdown with a quantity (and optional structure/job). "Edit component
-  list" lets you add, edit, delete and reorder components (drag ⋮⋮ or ▲ ▼; the dropdown follows the same order) (type, name, cost, weight; starts from `lib/catalog.ts`). Order lines
+  list" lets you add, edit, delete and reorder components (drag ⋮⋮ or ▲ ▼; the dropdown follows the same order). Saving an edit also updates the matching lines in the order that is open (name, type, cost, weight; qty and structure are kept). Other jobs' orders are not touched (type, name, cost, weight; starts from `lib/catalog.ts`). Order lines
   can be edited in place (structure, qty, unit cost), removed, or reordered (drag the ⋮⋮ handle or use ▲ ▼; the order carries into the PDF). The component list and order are remembered in this
   browser.
 - **Print / Save PDF** of exactly what's on screen (landscape, logo header, active filters listed).

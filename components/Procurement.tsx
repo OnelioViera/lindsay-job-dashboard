@@ -14,10 +14,12 @@ type CatItem = {
   weight: number;
 };
 
-// Order lines keep their own copy of name/cost/weight, so editing or deleting a
-// component in the list never changes an order that is already built.
+// Order lines keep their own copy of name/cost/weight. Editing a component in the list
+// updates the matching lines in the order that is open (catalogId links them); deleting
+// a component never removes lines from an order.
 type Extra = {
   id: string;
+  catalogId?: string;
   type: string;
   name: string;
   cost: number;
@@ -108,6 +110,7 @@ export default function Procurement() {
       ...extras,
       {
         id: crypto.randomUUID(),
+        catalogId: item.id,
         type: item.type,
         name: item.name,
         cost: item.cost,
@@ -187,6 +190,24 @@ export default function Procurement() {
     const cost = Number(edit.cost);
     const weight = Number(edit.weight || 0);
     if (!edit.name.trim() || !Number.isFinite(cost)) return;
+    const old = catalog.find((c) => c.id === editId);
+    const next = {
+      type: edit.type.trim() || "R&C",
+      name: edit.name.trim(),
+      cost,
+      weight: Number.isFinite(weight) ? weight : 0,
+    };
+    // Lines already in this order that came from this component follow the edit
+    // (older lines without a link are matched by their previous type + name).
+    if (old && editId)
+      saveExtras(
+        extras.map((e) =>
+          e.catalogId === editId ||
+          (!e.catalogId && e.type === old.type && e.name === old.name)
+            ? { ...e, ...next, catalogId: editId }
+            : e,
+        ),
+      );
     saveCatalog(
       catalog.map((c) =>
         c.id === editId
