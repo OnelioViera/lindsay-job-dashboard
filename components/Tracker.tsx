@@ -998,7 +998,7 @@ export default function Tracker() {
                           </span>
                           {r.structure}
                           {g.lines.length > 1 && (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 print:bg-transparent print:px-0">
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 print:hidden">
                               {g.lines.length} lines
                             </span>
                           )}
