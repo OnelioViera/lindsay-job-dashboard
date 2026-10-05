@@ -871,7 +871,7 @@ export default function Tracker() {
         }}
         className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none"
       >
-        <table className="w-full text-left text-sm print:w-full print:text-[8px] print:leading-tight">
+        <table className="print-fit w-full text-left text-sm">
           <thead className="sticky top-0 z-10 bg-navy text-white print:static">
             <tr>
               <th className="w-8 px-2 py-2 print:hidden">

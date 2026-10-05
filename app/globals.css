@@ -35,4 +35,26 @@ body {
   thead {
     display: table-header-group;
   }
+  /* Tracker print: one uniform small size, tight rows, so the table fits the page. */
+  .print-fit {
+    width: 100%;
+    table-layout: auto;
+  }
+  .print-fit th,
+  .print-fit td,
+  .print-fit button,
+  .print-fit span {
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+  }
+  .print-fit th,
+  .print-fit td {
+    padding: 2px 3px !important;
+    vertical-align: middle;
+  }
+  .print-fit button {
+    display: inline-flex;
+    gap: 4px;
+    white-space: nowrap;
+  }
 }
