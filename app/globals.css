@@ -44,7 +44,7 @@ body {
   .print-fit td,
   .print-fit button,
   .print-fit span {
-    font-size: 8px !important;
+    font-size: 10.5px !important;
     line-height: 1.15 !important;
   }
   .print-fit th,

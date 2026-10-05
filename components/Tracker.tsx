@@ -888,12 +888,12 @@ export default function Tracker() {
               <th className="px-2 py-2 print:px-1.5">Product</th>
               <th className="px-2 py-2 print:px-1.5">Description</th>
               <th className="px-2 py-2 print:px-1.5">Plant ID</th>
-              <th className="px-2 py-2 print:px-1.5">Production Department</th>
+              <th className="px-2 py-2 print:hidden">Production Department</th>
               <th className="px-2 py-2 print:px-1.5">Scheduled Date</th>
               <th className="px-2 py-2 print:px-1.5">Ready Date</th>
               <th className="px-2 py-2 print:px-1.5">Pick Date</th>
               <th className="px-2 py-2 text-right print:px-1.5">Weight</th>
-              <th className="px-2 py-2 print:px-1.5">UOM</th>
+              <th className="px-2 py-2 print:hidden">UOM</th>
               <th className="px-2 py-2 print:hidden">
                 <span className="sr-only">Delete</span>
               </th>
@@ -1018,7 +1018,7 @@ export default function Tracker() {
                     <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
                       {r.plant_id}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td className="px-2 py-2 whitespace-nowrap print:hidden">
                       {r.production_dep}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
@@ -1033,7 +1033,7 @@ export default function Tracker() {
                     <td className="px-2 py-2 text-right tabular-nums print:px-1.5">
                       {fmtWeight(r.weight)}
                     </td>
-                    <td className="px-2 py-2 print:px-1.5">{r.uom}</td>
+                    <td className="px-2 py-2 print:hidden">{r.uom}</td>
                     <td className="px-2 py-2 text-right print:hidden">
                       <button
                         onClick={() =>
