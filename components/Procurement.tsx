@@ -429,6 +429,27 @@ export default function Procurement() {
   };
   const shown = (e: Extra) => printMode === "all" || srcOf(e) === printMode;
   const printed = extras.filter(shown);
+  // Same item on several lines (e.g. one per structure) added together.
+  const summary = (() => {
+    const m = new Map<
+      string,
+      { type: string; name: string; cost: number; weight: number; qty: number }
+    >();
+    for (const e of printed) {
+      const k = e.catalogId ?? `${e.type}|${e.name}|${e.cost}`;
+      const g = m.get(k);
+      if (g) g.qty += e.qty;
+      else
+        m.set(k, {
+          type: e.type,
+          name: e.name,
+          cost: e.cost,
+          weight: e.weight,
+          qty: e.qty,
+        });
+    }
+    return [...m.values()];
+  })();
   const printCost = printed.reduce((n, e) => n + e.cost * e.qty, 0);
   const printWeight = printed.reduce((n, e) => n + e.weight * e.qty, 0);
   const extraCost = extras.reduce((n, e) => n + e.cost * e.qty, 0);
@@ -1031,6 +1052,55 @@ export default function Procurement() {
             </tbody>
           </table>
         </>
+      )}
+
+      {summary.length > 0 && (
+        <section className="mt-8 break-inside-avoid">
+          <h2 className="mb-2 text-lg font-semibold text-navy">
+            Total items to order
+          </h2>
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-navy text-left text-white">
+              <tr>
+                <th className="px-3 py-2">Item</th>
+                <th className="px-3 py-2 text-right">Total qty</th>
+                <th className="px-3 py-2 text-right">Unit cost</th>
+                <th className="px-3 py-2 text-right">Total</th>
+                <th className="px-3 py-2 text-right">Weight</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.map((g, i) => (
+                <tr key={i} className="border-b border-slate-200">
+                  <td className="px-3 py-1.5">
+                    {g.type} {g.name}
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-semibold">
+                    {g.qty}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">{money(g.cost)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold">
+                    {money(g.cost * g.qty)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                    {(g.weight * g.qty).toLocaleString()} lb
+                  </td>
+                </tr>
+              ))}
+              <tr className="font-semibold">
+                <td className="px-3 py-2">Total</td>
+                <td className="px-3 py-2 text-right">
+                  {summary.reduce((n, g) => n + g.qty, 0)}
+                </td>
+                <td />
+                <td className="px-3 py-2 text-right">{money(printCost)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  {printWeight.toLocaleString()} lb
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
       )}
 
       {extraRows.length === 0 && (
