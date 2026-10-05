@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { CATALOG } from "@/lib/catalog";
 import JobBanner from "./JobBanner";
+import BackButton from "./BackButton";
+import RecipePanel from "./RecipePanel";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 
 type CatItem = {
@@ -18,6 +20,13 @@ type CatItem = {
 // Order lines keep their own copy of name/cost/weight. Editing a component in the list
 // updates the matching lines in the order that is open (catalogId links them); deleting
 // a component never removes lines from an order.
+// Structures picked on the Structure Tracker ("Show only selected structures"), shown as a reference list.
+type Pick = {
+  structure: string;
+  product: string | null;
+  description: string | null;
+};
+
 type Extra = {
   id: string;
   catalogId?: string;
@@ -77,6 +86,7 @@ export default function Procurement() {
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [picks, setPicks] = useState<Pick[]>([]);
   const dirty = useRef(false); // unsaved local changes to this job's order
   const loadedFor = useRef<string | null>(null);
 
@@ -85,8 +95,35 @@ export default function Procurement() {
       ? `${m} — run the updated supabase/schema.sql in Supabase first.`
       : m;
 
+  const loadPicks = useCallback(async () => {
+    if (!jobId) return;
+    const { data, error } = await getSupabase()
+      .from("pour_picks")
+      .select("items")
+      .eq("job_id", jobId)
+      .maybeSingle();
+    if (error) {
+      setSyncError(failText(error.message));
+      return;
+    }
+    const items = ((data?.items ?? []) as Pick[]) || [];
+    setPicks((cur) =>
+      JSON.stringify(cur) === JSON.stringify(items) ? cur : items,
+    );
+  }, [jobId]);
+  const clearPicks = async () => {
+    if (!jobId) return;
+    setPicks([]);
+    const { error } = await getSupabase()
+      .from("pour_picks")
+      .delete()
+      .eq("job_id", jobId);
+    if (error) setSyncError(failText(error.message));
+  };
+
   const loadOrder = useCallback(async () => {
     if (!jobId) return;
+    void loadPicks();
     const { data, error } = await getSupabase()
       .from("procurement_orders")
       .select("po_number, vendor, notes, lines")
@@ -124,7 +161,7 @@ export default function Procurement() {
         }
       }
     } catch {}
-  }, [jobId, storeKey]);
+  }, [jobId, storeKey, loadPicks]);
 
   useEffect(() => {
     if (jobLoading) return;
@@ -279,6 +316,27 @@ export default function Procurement() {
     if (i < 0 || j < 0 || j >= catalog.length) return;
     moveCat(id, catalog[j].id);
   };
+  // Lines calculated from the recipes of the picked structures.
+  const addRecipeLines = (
+    lines: { catalogId: string; qty: number; structure: string }[],
+  ) => {
+    const added: Extra[] = [];
+    for (const l of lines) {
+      const item = catalog.find((c) => c.id === l.catalogId);
+      if (!item) continue;
+      added.push({
+        id: crypto.randomUUID(),
+        catalogId: item.id,
+        type: item.type,
+        name: item.name,
+        cost: item.cost,
+        weight: item.weight,
+        qty: l.qty,
+        structure: l.structure,
+      });
+    }
+    if (added.length > 0) saveExtras([...extras, ...added]);
+  };
   const patchExtra = (id: string, patch: Partial<Extra>) =>
     saveExtras(extras.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 
@@ -366,6 +424,7 @@ export default function Procurement() {
           </p>
         </div>
         <div className="flex gap-2">
+          <BackButton />
           <Link
             href="/"
             className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-white"
@@ -389,6 +448,49 @@ export default function Procurement() {
       </header>
 
       <JobBanner job={job} loading={jobLoading} />
+
+      {picks.length > 0 && (
+        <section className="mb-4 rounded-xl border border-navy/30 bg-white p-4 shadow-sm print:hidden">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="font-semibold text-navy">
+              Structures picked to schedule ({picks.length})
+            </h2>
+            <button
+              onClick={() => void clearPicks()}
+              className="text-sm text-brand-red hover:underline"
+            >
+              Clear list
+            </button>
+          </div>
+          <div className="max-h-56 overflow-auto rounded-md border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-slate-100 text-slate-700">
+                <tr>
+                  <th className="px-3 py-1.5">Structure ID</th>
+                  <th className="px-3 py-1.5">Product</th>
+                  <th className="px-3 py-1.5">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {picks.map((p) => (
+                  <tr key={p.structure} className="border-t border-slate-200">
+                    <td className="px-3 py-1.5 font-semibold text-navy">
+                      {p.structure}
+                    </td>
+                    <td className="px-3 py-1.5">{p.product}</td>
+                    <td className="px-3 py-1.5">{p.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            For reference while you choose components. Pick a different set on
+            the Structure Tracker to replace this list.
+          </p>
+          <RecipePanel picks={picks} catalog={catalog} onAdd={addRecipeLines} />
+        </section>
+      )}
 
       {syncError && (
         <div className="mb-3 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 print:hidden">

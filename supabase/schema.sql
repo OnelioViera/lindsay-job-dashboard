@@ -105,3 +105,33 @@ for all
 to authenticated
 using (true)
 with check (true);
+
+-- Structures picked on the Structure Tracker are shown on the Procurement Order page (safe to run again).
+create table if not exists public.pour_picks (
+  job_id uuid primary key references public.jobs(id) on delete cascade,
+  items jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.pour_picks enable row level security;
+drop policy if exists "authenticated full access" on public.pour_picks;
+create policy "authenticated full access"
+on public.pour_picks
+for all
+to authenticated
+using (true)
+with check (true);
+
+-- Recipes: which components one structure of a Product needs, used to fill the Procurement order (safe to run again).
+create table if not exists public.procurement_recipes (
+  id text primary key,
+  items jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.procurement_recipes enable row level security;
+drop policy if exists "authenticated full access" on public.procurement_recipes;
+create policy "authenticated full access"
+on public.procurement_recipes
+for all
+to authenticated
+using (true)
+with check (true);

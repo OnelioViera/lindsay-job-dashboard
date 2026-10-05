@@ -36,6 +36,18 @@ Next.js 15 + Tailwind 4 + Supabase, deployed on Vercel.
   in the printed header.
 - **Delete**: per-row Delete, row checkboxes (with select-all for what's currently shown) for "Delete selected", and
   "Delete all". Everything asks for confirmation; Delete all requires typing DELETE.
+- **Picked structures on the Procurement page**: when you pick structures on the Structure Tracker ("Show only selected
+  structures", or just tick rows — or narrow the list with a filter, date range or search) and click **Procurement order**, the list (Structure ID, Product, Description) appears at
+  the top of the Procurement page as a reference while you choose components. "Clear list" removes it. Needs the updated
+  `supabase/schema.sql` (adds `pour_picks`).
+- **Calculate components from the picked structures**: under the picked-structures list, **Edit recipes** lets you say which
+  components one structure of a Product needs (matched on the exact Product code from Titan). **Calculate components for
+  these structures** previews the components for every picked structure (change each structure's quantity if needed,
+  optionally combine identical components), flags structures whose Product has no recipe yet, and adds the lines to the order.
+  Recipes are shared across computers (needs the updated `supabase/schema.sql`: `procurement_recipes`).
+- **← Back** button on every page returns to the page you left, exactly as you left it: the Structure Tracker keeps its
+  filters, date range, search, sort, ticked rows, picked structures, expanded structures and scroll position (for this
+  browser tab); the Dashboard keeps its search, Active/Archived tab and scroll position.
 - **Procurement order** (button in the header → `/procurement`): add PO number / vendor / notes, then Print / Save PDF.
   **Add Components**: pick a component from the dropdown with a quantity (and optional structure/job). "Edit component
   list" lets you add, edit, delete and reorder components (drag ⋮⋮ or ▲ ▼; the dropdown follows the same order). Saving an edit also updates the matching lines in the order that is open (name, type, cost, weight; qty and structure are kept). Other jobs' orders are not touched (type, name, cost, weight; starts from `lib/catalog.ts`). Order lines

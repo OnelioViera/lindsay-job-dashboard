@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { rememberJob, withJob, type Job } from "@/lib/jobs";
+import BackButton from "./BackButton";
 import {
   analyze,
   fmtShort,
@@ -89,6 +90,49 @@ export default function Dashboard() {
   }, [load]);
 
   // Per-job metrics (structure counts), from the lines saved for each job.
+  // Remember where you left off (search, tab, scroll) so Back returns to the same view.
+  const restoredUi = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("dash-ui");
+      if (raw) {
+        const u = JSON.parse(raw);
+        setSearch(u.search ?? "");
+        setShowArchived(!!u.showArchived);
+      }
+    } catch {}
+    restoredUi.current = true;
+  }, []);
+  useEffect(() => {
+    if (!restoredUi.current) return;
+    try {
+      sessionStorage.setItem(
+        "dash-ui",
+        JSON.stringify({ search, showArchived }),
+      );
+    } catch {}
+  }, [search, showArchived]);
+  useEffect(() => {
+    let t: number | undefined;
+    const save = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        try {
+          sessionStorage.setItem("dash-scroll", String(window.scrollY));
+        } catch {}
+      }, 100);
+    };
+    window.addEventListener("scroll", save, { passive: true });
+    return () => window.removeEventListener("scroll", save);
+  }, []);
+  useEffect(() => {
+    if (loading) return;
+    try {
+      const y = Number(sessionStorage.getItem("dash-scroll") ?? 0);
+      if (y > 0) requestAnimationFrame(() => window.scrollTo(0, y));
+    } catch {}
+  }, [loading]);
+
   const [metrics, setMetrics] = useState<Record<string, JobMetrics>>({});
   const [metricsJobId, setMetricsJobId] = useState<string | null>(null);
   useEffect(() => {
@@ -588,6 +632,7 @@ export default function Dashboard() {
             Order.
           </p>
         </div>
+        <BackButton />
         <button
           onClick={() => void getSupabase().auth.signOut()}
           className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-white"

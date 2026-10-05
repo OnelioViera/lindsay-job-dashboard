@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import BackButton from "./BackButton";
 import { getSupabase } from "@/lib/supabase";
 import { FILTERS, type FilterKey, type Row } from "@/lib/types";
 import Link from "next/link";
@@ -122,10 +124,10 @@ export default function Tracker() {
   const [needsPour, setNeedsPour] = useState(false);
   // Opened from a Dashboard metrics chip (?show=…): only structures in that group.
   const [quick, setQuick] = useState<QuickKey | null>(null);
-  useEffect(() => {
-    const s = new URLSearchParams(window.location.search).get("show");
-    if (s && (QUICK_KEYS as string[]).includes(s)) setQuick(s as QuickKey);
-  }, []);
+  const router = useRouter();
+  const tableRef = useRef<HTMLElement | null>(null);
+  const restoredFor = useRef<string | null>(null);
+  const scrolled = useRef(false);
   // Structures picked for the scheduler; when set, only these are shown.
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
@@ -142,6 +144,110 @@ export default function Tracker() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const jobId = job?.id ?? null;
+
+  // Remember where you left off (filters, picks, expanded structures, scroll) for this tab, so
+  // coming Back to this page shows it exactly as it was.
+  useEffect(() => {
+    if (!jobId || restoredFor.current === jobId) return;
+    restoredFor.current = jobId;
+    scrolled.current = false;
+    try {
+      const raw = sessionStorage.getItem(`tracker-ui:${jobId}`);
+      if (raw) {
+        const u = JSON.parse(raw);
+        setActive(new Set(u.active ?? []));
+        setSearch(u.search ?? "");
+        setSort(u.sort ?? "paste");
+        setSelected(new Set(u.selected ?? []));
+        setNeedsPour(!!u.needsPour);
+        setQuick(u.quick ?? null);
+        setPicked(u.picked ? new Set(u.picked) : null);
+        setDateField(u.dateField ?? "any");
+        setDateFrom(u.dateFrom ?? "");
+        setDateTo(u.dateTo ?? "");
+        setExpanded(new Set(u.expanded ?? []));
+      }
+    } catch {}
+    // A Dashboard metrics chip opens this page with ?show=…; apply it once, then tidy the URL.
+    const url = new URL(window.location.href);
+    const s = url.searchParams.get("show");
+    if (s) {
+      if ((QUICK_KEYS as string[]).includes(s)) setQuick(s as QuickKey);
+      url.searchParams.delete("show");
+      window.history.replaceState(null, "", url.pathname + url.search);
+    }
+  }, [jobId]);
+  useEffect(() => {
+    if (!jobId || restoredFor.current !== jobId) return;
+    try {
+      sessionStorage.setItem(
+        `tracker-ui:${jobId}`,
+        JSON.stringify({
+          active: [...active],
+          search,
+          sort,
+          selected: [...selected],
+          needsPour,
+          quick,
+          picked: picked ? [...picked] : null,
+          dateField,
+          dateFrom,
+          dateTo,
+          expanded: [...expanded],
+        }),
+      );
+    } catch {}
+  }, [
+    jobId,
+    active,
+    search,
+    sort,
+    selected,
+    needsPour,
+    quick,
+    picked,
+    dateField,
+    dateFrom,
+    dateTo,
+    expanded,
+  ]);
+  useEffect(() => {
+    if (loading || !jobId || scrolled.current || restoredFor.current !== jobId)
+      return;
+    scrolled.current = true;
+    try {
+      const y = Number(sessionStorage.getItem(`tracker-scroll:${jobId}`) ?? 0);
+      if (y > 0)
+        requestAnimationFrame(() => {
+          if (tableRef.current) tableRef.current.scrollTop = y;
+        });
+    } catch {}
+  }, [loading, jobId]);
+
+  // The structures picked for the scheduler are shared with the Procurement Order page as a reference list.
+  const savePicks = async (structures: Set<string>) => {
+    if (!jobId || structures.size === 0) return;
+    const first = new Map<string, Row>();
+    for (const r of [...rows].sort((a, b) => a.sort_order - b.sort_order))
+      if (structures.has(r.structure) && !first.has(r.structure))
+        first.set(r.structure, r);
+    const items = [...first.values()].map((r) => ({
+      structure: r.structure,
+      product: r.product,
+      description: r.description,
+    }));
+    const { error } = await getSupabase().from("pour_picks").upsert({
+      job_id: jobId,
+      items,
+      updated_at: new Date().toISOString(),
+    });
+    if (error)
+      setError(
+        /pour_picks|relation/.test(error.message)
+          ? `${error.message} — run the updated supabase/schema.sql in Supabase first.`
+          : error.message,
+      );
+  };
   // The browser uses the page title for the print header and the default PDF name.
   const pageTitle = picked ? "Schedule to pour" : "Structure Tracker";
   useEffect(() => {
@@ -390,6 +496,7 @@ export default function Tracker() {
           </p>
         </div>
         <div className="flex gap-2">
+          <BackButton />
           <Link
             href="/"
             className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-white"
@@ -405,6 +512,33 @@ export default function Tracker() {
           </button>
           <Link
             href={withJob("/procurement", job?.id)}
+            onClick={async (e) => {
+              // Hand the structures you picked (or ticked) to the Procurement page first.
+              // Priority: structures picked for the scheduler, then ticked rows, then — when the
+              // list is narrowed by a filter, date range or search — the structures being shown.
+              const narrowed =
+                active.size > 0 ||
+                search.trim() !== "" ||
+                dateFrom !== "" ||
+                dateTo !== "" ||
+                needsPour ||
+                quick !== null;
+              const chosen =
+                picked ??
+                (selectedIds.length > 0
+                  ? new Set(
+                      visible
+                        .filter((r) => selected.has(r.id))
+                        .map((r) => r.structure),
+                    )
+                  : narrowed
+                    ? new Set(groups.map((g) => g.structure))
+                    : null);
+              if (!chosen || chosen.size === 0) return;
+              e.preventDefault();
+              await savePicks(chosen);
+              router.push(withJob("/procurement", job?.id));
+            }}
             className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy hover:bg-white"
           >
             Procurement order
@@ -653,15 +787,15 @@ export default function Tracker() {
           ) : (
             selectedIds.length > 0 && (
               <button
-                onClick={() =>
-                  setPicked(
-                    new Set(
-                      visible
-                        .filter((r) => selected.has(r.id))
-                        .map((r) => r.structure),
-                    ),
-                  )
-                }
+                onClick={() => {
+                  const chosen = new Set(
+                    visible
+                      .filter((r) => selected.has(r.id))
+                      .map((r) => r.structure),
+                  );
+                  setPicked(chosen);
+                  void savePicks(chosen);
+                }}
                 className="rounded-md bg-navy px-3 py-1.5 font-semibold text-white hover:bg-navy-dark"
               >
                 Show only selected structures (
@@ -714,7 +848,19 @@ export default function Tracker() {
       )}
 
       {/* Table */}
-      <section className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none">
+      <section
+        ref={tableRef}
+        onScroll={(e) => {
+          try {
+            if (jobId)
+              sessionStorage.setItem(
+                `tracker-scroll:${jobId}`,
+                String(e.currentTarget.scrollTop),
+              );
+          } catch {}
+        }}
+        className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none"
+      >
         <table className="w-full text-left text-sm print:w-full print:text-[8px] print:leading-tight">
           <thead className="sticky top-0 z-10 bg-navy text-white print:static">
             <tr>
