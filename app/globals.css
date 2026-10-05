@@ -49,7 +49,7 @@ body {
   }
   .print-fit th,
   .print-fit td {
-    padding: 2px 3px !important;
+    padding: 7px 4px !important;
     vertical-align: middle;
   }
   .print-fit button {
