@@ -328,21 +328,31 @@ export default function Tracker() {
       );
     }
 
-    return rows
-      .filter((r) => (needsPour ? neverScheduled.has(r.structure) : true))
-      .filter((r) => (picked ? picked.has(r.structure) : true))
-      .filter((r) => (quick ? quickSets[quick].has(r.structure) : true))
-      .filter((r) => (inRange ? inRange.has(r.structure) : true))
-      .filter((r) => (tests.length === 0 ? true : tests.some((f) => f.test(r))))
-      .filter((r) =>
-        q
-          ? r.structure.toLowerCase().includes(q) ||
-            (r.description ?? "").toLowerCase().includes(q) ||
-            (r.product ?? "").toLowerCase().includes(q)
-          : true,
-      )
-      .sort((a, b) => compare(a, b, sort));
+    return (
+      rows
+        .filter((r) => (needsPour ? neverScheduled.has(r.structure) : true))
+        .filter((r) => (picked ? picked.has(r.structure) : true))
+        .filter((r) => (quick ? quickSets[quick].has(r.structure) : true))
+        .filter((r) => (inRange ? inRange.has(r.structure) : true))
+        .filter((r) =>
+          tests.length === 0 ? true : tests.some((f) => f.test(r)),
+        )
+        .filter((r) =>
+          q
+            ? r.structure.toLowerCase().includes(q) ||
+              (r.description ?? "").toLowerCase().includes(q) ||
+              (r.product ?? "").toLowerCase().includes(q)
+            : true,
+        )
+        // Structures that already have a Pick Date can't be scheduled any more: keep them at the bottom.
+        .sort(
+          (a, b) =>
+            Number(quickSets.picked.has(a.structure)) -
+              Number(quickSets.picked.has(b.structure)) || compare(a, b, sort),
+        )
+    );
   }, [
+    quickSets,
     rows,
     active,
     search,
