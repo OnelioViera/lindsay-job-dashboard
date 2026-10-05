@@ -74,3 +74,5 @@ Environment Variables, deploy.
 ## Check the Titan parser
 
 `npm run test:parser -- path/to/titan-export.txt`
+
+- Procurement printing: "Print single components", "Print structure order" (recipe-calculated lines) or "Print all". Lines remember how they were added.

@@ -36,6 +36,7 @@ type Extra = {
   weight: number;
   qty: number;
   structure: string;
+  src?: "recipe" | "manual";
 };
 
 const money = (n: number) =>
@@ -275,6 +276,7 @@ export default function Procurement() {
         weight: item.weight,
         qty: pickQty,
         structure: pickStructure.trim(),
+        src: "manual",
       },
     ]);
     setPickQty(1);
@@ -333,6 +335,7 @@ export default function Procurement() {
         weight: item.weight,
         qty: l.qty,
         structure: l.structure,
+        src: "recipe",
       });
     }
     if (added.length > 0) saveExtras([...extras, ...added]);
@@ -408,6 +411,26 @@ export default function Procurement() {
     if (pick === c.id) setPick("");
   };
   const extraRows = extras;
+  // Which lines go on paper: everything, only recipe-calculated, or only single components.
+  const [printMode, setPrintMode] = useState<"all" | "recipe" | "manual">(
+    "all",
+  );
+  useEffect(() => {
+    const reset = () => setPrintMode("all");
+    window.addEventListener("afterprint", reset);
+    return () => window.removeEventListener("afterprint", reset);
+  }, []);
+  const srcOf = (e: Extra) => e.src ?? "manual";
+  const nRecipe = extras.filter((e) => srcOf(e) === "recipe").length;
+  const nManual = extras.length - nRecipe;
+  const printLines = (m: "all" | "recipe" | "manual") => {
+    setPrintMode(m);
+    setTimeout(() => window.print(), 100);
+  };
+  const shown = (e: Extra) => printMode === "all" || srcOf(e) === printMode;
+  const printed = extras.filter(shown);
+  const printCost = printed.reduce((n, e) => n + e.cost * e.qty, 0);
+  const printWeight = printed.reduce((n, e) => n + e.weight * e.qty, 0);
   const extraCost = extras.reduce((n, e) => n + e.cost * e.qty, 0);
   const extraWeight = extras.reduce((n, e) => n + e.weight * e.qty, 0);
 
@@ -438,11 +461,27 @@ export default function Procurement() {
             Structure Tracker
           </Link>
           <button
-            onClick={() => window.print()}
-            disabled={extraRows.length === 0}
+            onClick={() => printLines("manual")}
+            disabled={nManual === 0}
+            title="Print only the components added one at a time"
             className="rounded-md bg-brand-red px-4 py-2 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-50"
           >
-            Print / Save PDF
+            Print single components ({nManual})
+          </button>
+          <button
+            onClick={() => printLines("recipe")}
+            disabled={nRecipe === 0}
+            title="Print only the lines calculated from structure recipes"
+            className="rounded-md bg-brand-red px-4 py-2 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-50"
+          >
+            Print structure order ({nRecipe})
+          </button>
+          <button
+            onClick={() => printLines("all")}
+            disabled={extras.length === 0}
+            className="rounded-md border border-brand-red px-4 py-2 text-sm font-semibold text-brand-red hover:bg-white disabled:opacity-50"
+          >
+            Print all
           </button>
         </div>
       </header>
@@ -811,7 +850,11 @@ export default function Procurement() {
       <div className="hidden items-center gap-4 border-b-2 border-navy pb-3 print:flex">
         <img src="/logo.png" alt="Lindsay Precast" className="h-16 w-auto" />
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-navy">Procurement Order</h1>
+          <h1 className="text-xl font-bold text-navy">
+            Procurement Order
+            {printMode === "recipe" && " — Structure components"}
+            {printMode === "manual" && " — Single components"}
+          </h1>
           {job && (
             <p className="text-sm font-semibold text-slate-800">
               {jobLine(job)}
@@ -860,6 +903,8 @@ export default function Procurement() {
                     setOverExtra(null);
                   }}
                   className={`border-b border-slate-200 ${
+                    shown(e) ? "" : "print:hidden"
+                  } ${
                     dragExtra === e.id
                       ? "opacity-40"
                       : overExtra === e.id && dragExtra
@@ -967,9 +1012,19 @@ export default function Procurement() {
                 <td className="px-3 py-2" colSpan={4}>
                   Total
                 </td>
-                <td className="px-3 py-2 text-right">{money(extraCost)}</td>
+                <td className="px-3 py-2 text-right">
+                  <span className="print:hidden">{money(extraCost)}</span>
+                  <span className="hidden print:inline">
+                    {money(printCost)}
+                  </span>
+                </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  {extraWeight.toLocaleString()} lb
+                  <span className="print:hidden">
+                    {extraWeight.toLocaleString()} lb
+                  </span>
+                  <span className="hidden print:inline">
+                    {printWeight.toLocaleString()} lb
+                  </span>
                 </td>
                 <td className="print:hidden" />
               </tr>
