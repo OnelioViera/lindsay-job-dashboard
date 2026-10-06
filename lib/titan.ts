@@ -21,6 +21,8 @@ export type ParseResult = {
   rows: ParsedRow[];
   structureCount: number;
   warnings: string[];
+  /** Fields whose column was not in the paste. An import must leave these alone, not blank them. */
+  absent: (keyof ParsedRow)[];
 };
 
 /** Split tab-separated text into rows, honoring "quoted ""fields""" that may contain tabs/newlines. */
@@ -99,6 +101,7 @@ export function parseTitan(text: string): ParseResult {
     return {
       rows: [],
       structureCount: 0,
+      absent: [],
       warnings: [
         "Nothing to import — paste the full Titan sheet including the header row.",
       ],
@@ -134,6 +137,7 @@ export function parseTitan(text: string): ParseResult {
     return {
       rows: [],
       structureCount: 0,
+      absent: [],
       warnings: [
         'Could not find a "Structure" column. Make sure the header row is included in what you paste.',
       ],
@@ -158,9 +162,27 @@ export function parseTitan(text: string): ParseResult {
   const missing = (Object.keys(c) as (keyof typeof c)[])
     .filter((k) => c[k] < 0)
     .map((k) => labels[k]);
+  const fieldOf: Record<keyof typeof c, keyof ParsedRow> = {
+    pri: "priority",
+    structure: "structure",
+    description: "description",
+    plant: "plantId",
+    dep: "productionDep",
+    sch: "schDate",
+    ready: "readyDate",
+    pro: "proDate",
+    pick: "pickDate",
+    weight: "weight",
+    uom: "uom",
+    product: "product",
+    qty: "qty",
+  };
+  const absent = (Object.keys(c) as (keyof typeof c)[])
+    .filter((k) => c[k] < 0)
+    .map((k) => fieldOf[k]);
   if (missing.length > 0) {
     warnings.push(
-      `These columns weren't found in the paste and will be blank: ${missing.join(", ")}.`,
+      `These columns weren't found in the paste: ${missing.join(", ")}. Lines already in the app keep their current values for them; new lines get blanks.`,
     );
   }
 
@@ -202,5 +224,6 @@ export function parseTitan(text: string): ParseResult {
     rows,
     structureCount: new Set(rows.map((r) => r.structure)).size,
     warnings,
+    absent,
   };
 }

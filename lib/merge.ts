@@ -63,7 +63,27 @@ const sameNum = (a: number | null, b: number | null) =>
   (a === null && b === null) ||
   (a !== null && b !== null && Number(a) === Number(b));
 
-export function planMerge(existing: DbLine[], pasted: ParsedRow[]): MergePlan {
+// What a stored line holds for each pasted field, so columns missing from a paste can keep it.
+const stored = (l: DbLine): Partial<Record<keyof ParsedRow, unknown>> => ({
+  priority: l.priority,
+  description: l.description ?? "",
+  plantId: l.plant_id ?? "",
+  productionDep: l.production_dep ?? "",
+  schDate: l.sch_date,
+  readyDate: l.ready_date,
+  proDate: l.pro_date,
+  pickDate: l.pick_date,
+  weight: l.weight,
+  uom: l.uom ?? "",
+  product: l.product ?? "",
+  qty: l.qty,
+});
+
+export function planMerge(
+  existing: DbLine[],
+  pasted: ParsedRow[],
+  absent: (keyof ParsedRow)[] = [],
+): MergePlan {
   const sorted = [...existing].sort((a, b) => a.sort_order - b.sort_order);
 
   const full = new Map<string, DbLine[]>();
@@ -105,11 +125,16 @@ export function planMerge(existing: DbLine[], pasted: ParsedRow[]): MergePlan {
     missing: sorted.filter((l) => !used.has(l.id)),
   };
 
-  pasted.forEach((r, index) => {
+  pasted.forEach((pr, index) => {
     const l = match[index];
     if (!l) {
-      plan.inserts.push({ index, row: r });
+      plan.inserts.push({ index, row: pr });
       return;
+    }
+    // Columns that weren't in the paste keep what the app already has.
+    const r: ParsedRow = { ...pr };
+    for (const f of absent) {
+      if (f in stored(l)) (r as Record<string, unknown>)[f] = stored(l)[f];
     }
 
     const changes: Change[] = [];

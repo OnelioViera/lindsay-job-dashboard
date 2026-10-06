@@ -68,7 +68,7 @@ export default function ImportModal({
   const plan = useMemo(
     () =>
       parsed && parsed.rows.length > 0 && existing
-        ? planMerge(existing, parsed.rows)
+        ? planMerge(existing, parsed.rows, parsed.absent)
         : null,
     [parsed, existing],
   );
