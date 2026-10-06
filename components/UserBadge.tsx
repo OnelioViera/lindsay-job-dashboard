@@ -76,8 +76,9 @@ export default function UserBadge() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="8" cy="15" r="4" />
-          <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+          <path d="M3 11l9-8 9 8" />
+          <path d="M5 10v10h14V10" />
+          <path d="M10 20v-6h4v6" />
         </svg>
       </button>
       {open && (
