@@ -319,6 +319,19 @@ export default function Tracker() {
       if (v) setNoPrint(new Set(JSON.parse(v) as string[]));
     } catch {}
   }, []);
+  // Title on the printout / saved PDF ("" = automatic).
+  const [printTitle, setPrintTitle] = useState("");
+  useEffect(() => {
+    try {
+      setPrintTitle(localStorage.getItem("print-title") ?? "");
+    } catch {}
+  }, []);
+  const changePrintTitle = (v: string) => {
+    setPrintTitle(v);
+    try {
+      localStorage.setItem("print-title", v);
+    } catch {}
+  };
   const togglePrintCol = (k: string) =>
     setNoPrint((prev) => {
       const next = new Set(prev);
@@ -527,6 +540,26 @@ export default function Tracker() {
 
   const COLS = 12;
 
+  const headingText =
+    printTitle || (picked ? "Schedule to pour" : "Structure Tracker");
+  // The saved PDF takes its file name from the page title, so name it after the printout.
+  useEffect(() => {
+    let old = document.title;
+    const before = () => {
+      old = document.title;
+      document.title = `${headingText}${job ? ` - Job ${job.job_number}` : ""}`;
+    };
+    const after = () => {
+      document.title = old;
+    };
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", after);
+    };
+  }, [headingText, job]);
+
   return (
     <div className="mx-auto flex h-screen w-full max-w-[1800px] flex-col overflow-hidden px-4 py-5 md:px-12 print:block print:h-auto print:overflow-visible print:max-w-none print:p-0">
       {/* Screen header */}
@@ -609,9 +642,7 @@ export default function Tracker() {
       <div className="mb-3 hidden items-center gap-4 border-b-2 border-navy pb-2 print:flex">
         <img src="/logo.png" alt="Lindsay Precast" className="h-16 w-auto" />
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-navy">
-            {picked ? "Schedule to pour" : "Structure Tracker"}
-          </h1>
+          <h1 className="text-xl font-bold text-navy">{headingText}</h1>
           {job && (
             <p className="text-sm font-semibold text-slate-800">
               {jobLine(job)}
@@ -813,6 +844,21 @@ export default function Tracker() {
               ? `${selectedIds.length} selected`
               : "Tick rows to delete several at once"}
           </span>
+          <label className="flex items-center gap-2 text-slate-600">
+            Print title
+            <select
+              value={printTitle}
+              onChange={(e) => changePrintTitle(e.target.value)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-slate-700"
+            >
+              <option value="">Automatic</option>
+              <option value="Schedule to pour">Schedule to pour</option>
+              <option value="Schedule for delivery">
+                Schedule for delivery
+              </option>
+              <option value="Structure Tracker">Structure Tracker</option>
+            </select>
+          </label>
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy">
               Print columns ({PRINT_COLS.length - noPrint.size}/
