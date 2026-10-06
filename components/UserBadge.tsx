@@ -63,9 +63,22 @@ export default function UserBadge() {
         type="button"
         onClick={() => setOpen(true)}
         title="Signed in as — click to change your password"
-        className="rounded-md bg-navy/10 px-3 py-2 text-sm font-semibold text-navy hover:bg-navy/20 print:hidden"
+        className="flex items-center gap-2 rounded-md bg-navy/10 px-3 py-2 text-sm font-semibold text-navy hover:bg-navy/20 print:hidden"
       >
         {name}
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="8" cy="15" r="4" />
+          <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+        </svg>
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
