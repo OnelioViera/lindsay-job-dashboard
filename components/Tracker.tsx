@@ -297,6 +297,38 @@ export default function Tracker() {
     return new Set([...has.entries()].filter(([, v]) => !v).map(([k]) => k));
   }, [rows]);
 
+  // Columns left off the printout (remembered on this computer).
+  const PRINT_COLS: [string, string][] = [
+    ["priority", "Priority"],
+    ["structure", "Structure ID"],
+    ["product", "Product"],
+    ["description", "Description"],
+    ["plant", "Plant ID"],
+    ["dept", "Production Department"],
+    ["sch", "Scheduled Date"],
+    ["ready", "Ready Date"],
+    ["pick", "Pick Date"],
+    ["weight", "Weight"],
+    ["uom", "UOM"],
+  ];
+  const [noPrint, setNoPrint] = useState<Set<string>>(new Set(["dept", "uom"]));
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("print-cols-hidden");
+      if (v) setNoPrint(new Set(JSON.parse(v) as string[]));
+    } catch {}
+  }, []);
+  const togglePrintCol = (k: string) =>
+    setNoPrint((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      try {
+        localStorage.setItem("print-cols-hidden", JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+
   const quickSets = useMemo(() => analyze(rows).sets, [rows]);
 
   const counts = useMemo(() => {
@@ -779,6 +811,27 @@ export default function Tracker() {
               ? `${selectedIds.length} selected`
               : "Tick rows to delete several at once"}
           </span>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy">
+              Print columns ({PRINT_COLS.length - noPrint.size}/
+              {PRINT_COLS.length})
+            </summary>
+            <div className="absolute left-0 z-30 mt-1 w-60 rounded-md border border-slate-300 bg-white p-3 shadow-lg">
+              <p className="mb-2 text-xs text-slate-500">
+                Ticked columns are printed.
+              </p>
+              {PRINT_COLS.map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={!noPrint.has(k)}
+                    onChange={() => togglePrintCol(k)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </details>
           <button
             onClick={allExpanded ? collapseAll : expandAll}
             disabled={groups.length === 0}
@@ -872,6 +925,11 @@ export default function Tracker() {
         className="min-h-0 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:shadow-none"
       >
         <table className="print-fit w-full text-left text-sm">
+          <caption className="hidden">
+            <style>{`@media print{${[...noPrint]
+              .map((k) => `[data-col="${k}"]{display:none !important}`)
+              .join("")}}`}</style>
+          </caption>
           <thead className="sticky top-0 z-10 bg-navy text-white print:static">
             <tr>
               <th className="w-8 px-2 py-2 print:hidden">
@@ -883,17 +941,42 @@ export default function Tracker() {
                   aria-label="Select all shown lines"
                 />
               </th>
-              <th className="px-2 py-2 print:px-1.5">Priority</th>
-              <th className="px-2 py-2 print:px-1.5">Structure ID</th>
-              <th className="px-2 py-2 print:px-1.5">Product</th>
-              <th className="px-2 py-2 print:px-1.5">Description</th>
-              <th className="px-2 py-2 print:px-1.5">Plant ID</th>
-              <th className="px-2 py-2 print:hidden">Production Department</th>
-              <th className="px-2 py-2 print:px-1.5">Scheduled Date</th>
-              <th className="px-2 py-2 print:px-1.5">Ready Date</th>
-              <th className="px-2 py-2 print:px-1.5">Pick Date</th>
-              <th className="px-2 py-2 text-right print:px-1.5">Weight</th>
-              <th className="px-2 py-2 print:hidden">UOM</th>
+              <th data-col="priority" className="px-2 py-2 print:px-1.5">
+                Priority
+              </th>
+              <th data-col="structure" className="px-2 py-2 print:px-1.5">
+                Structure ID
+              </th>
+              <th data-col="product" className="px-2 py-2 print:px-1.5">
+                Product
+              </th>
+              <th data-col="description" className="px-2 py-2 print:px-1.5">
+                Description
+              </th>
+              <th data-col="plant" className="px-2 py-2 print:px-1.5">
+                Plant ID
+              </th>
+              <th data-col="dept" className="px-2 py-2">
+                Production Department
+              </th>
+              <th data-col="sch" className="px-2 py-2 print:px-1.5">
+                Scheduled Date
+              </th>
+              <th data-col="ready" className="px-2 py-2 print:px-1.5">
+                Ready Date
+              </th>
+              <th data-col="pick" className="px-2 py-2 print:px-1.5">
+                Pick Date
+              </th>
+              <th
+                data-col="weight"
+                className="px-2 py-2 text-right print:px-1.5"
+              >
+                Weight
+              </th>
+              <th data-col="uom" className="px-2 py-2">
+                UOM
+              </th>
               <th className="px-2 py-2 print:hidden">
                 <span className="sr-only">Delete</span>
               </th>
@@ -976,10 +1059,16 @@ export default function Tracker() {
                         />
                       )}
                     </td>
-                    <td className="px-2 py-2 text-slate-600 print:px-1.5">
+                    <td
+                      data-col="priority"
+                      className="px-2 py-2 text-slate-600 print:px-1.5"
+                    >
                       {r.priority ?? ""}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="structure"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {isHeader ? (
                         <button
                           type="button"
@@ -1009,31 +1098,57 @@ export default function Tracker() {
                         </span>
                       )}
                     </td>
-                    <td className="px-2 py-2 text-xs whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="product"
+                      className="px-2 py-2 text-xs whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {r.product}
                     </td>
-                    <td className="min-w-56 px-2 py-2 print:min-w-0 print:px-1.5">
+                    <td
+                      data-col="description"
+                      className="min-w-56 px-2 py-2 print:min-w-0 print:px-1.5"
+                    >
                       {r.description}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="plant"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {r.plant_id}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:hidden">
+                    <td
+                      data-col="dept"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {r.production_dep}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="sch"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {fmtDate(r.sch_date)}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="ready"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {fmtDate(r.ready_date)}
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5">
+                    <td
+                      data-col="pick"
+                      className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
+                    >
                       {fmtDate(r.pick_date)}
                     </td>
-                    <td className="px-2 py-2 text-right tabular-nums print:px-1.5">
+                    <td
+                      data-col="weight"
+                      className="px-2 py-2 text-right tabular-nums print:px-1.5"
+                    >
                       {fmtWeight(r.weight)}
                     </td>
-                    <td className="px-2 py-2 print:hidden">{r.uom}</td>
+                    <td data-col="uom" className="px-2 py-2 print:px-1.5">
+                      {r.uom}
+                    </td>
                     <td className="px-2 py-2 text-right print:hidden">
                       <button
                         onClick={() =>
