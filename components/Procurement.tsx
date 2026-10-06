@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { CATALOG } from "@/lib/catalog";
 import JobBanner from "./JobBanner";
+import UserBadge from "@/components/UserBadge";
 import BackButton from "./BackButton";
 import RecipePanel from "./RecipePanel";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
@@ -472,6 +473,7 @@ export default function Procurement() {
         </div>
         <div className="flex gap-2">
           <BackButton />
+          <UserBadge />
           <Link
             href="/"
             className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-white"

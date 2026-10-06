@@ -45,6 +45,15 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Never leave the last person's login typed into the sign-in form.
+  useEffect(() => {
+    if (!signedIn) {
+      setEmail("");
+      setPassword("");
+      setError(null);
+    }
+  }, [signedIn]);
+
   if (!supabaseConfigured) {
     return (
       <main className="mx-auto max-w-xl p-8">
@@ -95,6 +104,8 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           className="mx-auto mb-6 h-32 w-auto"
         />
         <form
+          key="signin"
+          autoComplete="off"
           onSubmit={submit}
           className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
@@ -104,7 +115,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <input
             type="email"
             required
-            autoComplete="email"
+            autoComplete="off"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -113,7 +124,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
           <input
             type="password"
             required
-            autoComplete="current-password"
+            autoComplete="new-password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

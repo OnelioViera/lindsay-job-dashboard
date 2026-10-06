@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import UserBadge from "@/components/UserBadge";
 import BackButton from "./BackButton";
 import { getSupabase } from "@/lib/supabase";
 import { FILTERS, type FilterKey, type Row } from "@/lib/types";
@@ -592,6 +593,7 @@ export default function Tracker() {
           >
             Print / Save PDF
           </button>
+          <UserBadge />
           <button
             onClick={onSignOut}
             className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-white"

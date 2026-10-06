@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { rememberJob, withJob, type Job } from "@/lib/jobs";
+import UserBadge from "@/components/UserBadge";
 import BackButton from "./BackButton";
 import {
   analyze,
@@ -633,6 +634,7 @@ export default function Dashboard() {
           </p>
         </div>
         <BackButton />
+        <UserBadge />
         <button
           onClick={() => void getSupabase().auth.signOut()}
           className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-white"
