@@ -135,3 +135,5 @@ for all
 to authenticated
 using (true)
 with check (true);
+
+-- Per-person data: after the above, also run supabase/per_user.sql.

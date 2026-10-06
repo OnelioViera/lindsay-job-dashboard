@@ -71,11 +71,14 @@ export default function RecipePanel({
 
   const persist = async (next: Recipe[]) => {
     setRecipes(next);
-    const { error } = await getSupabase().from("procurement_recipes").upsert({
-      id: "main",
-      items: next,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await getSupabase().from("procurement_recipes").upsert(
+      {
+        id: "main",
+        items: next,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,id" },
+    );
     if (error) setErr(error.message);
   };
 

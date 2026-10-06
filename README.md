@@ -76,3 +76,5 @@ Environment Variables, deploy.
 `npm run test:parser -- path/to/titan-export.txt`
 
 - Procurement printing: "Print single components", "Print structure order" (recipe-calculated lines) or "Print all". Lines remember how they were added.
+
+- Per-person data: run `supabase/per_user.sql` once (set the owner email first). Each login then sees only its own jobs, lines, orders, component list and recipes; browser memory is wiped on sign-out / user change.

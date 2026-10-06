@@ -48,7 +48,10 @@ const CAT_STORE = "procurement-catalog";
 async function pushCatalogRemote(items: CatItem[]): Promise<string | null> {
   const { error } = await getSupabase()
     .from("procurement_catalog")
-    .upsert({ id: "main", items, updated_at: new Date().toISOString() });
+    .upsert(
+      { id: "main", items, updated_at: new Date().toISOString() },
+      { onConflict: "user_id,id" },
+    );
   return error ? error.message : null;
 }
 

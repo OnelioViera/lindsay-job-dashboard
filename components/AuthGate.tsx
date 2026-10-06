@@ -3,6 +3,21 @@
 import { useEffect, useState } from "react";
 import { getSupabase, supabaseConfigured } from "@/lib/supabase";
 
+// Everything remembered in this browser belongs to one person. When someone signs out or a different
+// person signs in, wipe it so their jobs/selections/orders never show up for the next person.
+function forgetPreviousUser(userId: string | null) {
+  try {
+    const last = localStorage.getItem("last-user-id");
+    if (userId === null || (last && last !== userId)) {
+      const keep = localStorage.getItem("print-cols-hidden");
+      localStorage.clear();
+      sessionStorage.clear();
+      if (keep) localStorage.setItem("print-cols-hidden", keep);
+    }
+    if (userId) localStorage.setItem("last-user-id", userId);
+  } catch {}
+}
+
 export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
@@ -18,10 +33,13 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
     }
     const supabase = getSupabase();
     supabase.auth.getSession().then(({ data }) => {
+      if (data.session) forgetPreviousUser(data.session.user.id);
       setSignedIn(!!data.session);
       setReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") forgetPreviousUser(null);
+      else if (session) forgetPreviousUser(session.user.id);
       setSignedIn(!!session);
     });
     return () => sub.subscription.unsubscribe();
