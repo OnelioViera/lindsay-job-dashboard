@@ -191,10 +191,10 @@ export function parseTitan(text: string): ParseResult {
   const rows: ParsedRow[] = [];
   let blankStructure = 0;
   for (const r of table.slice(1)) {
-    let structure = get(r, c.structure);
+    const structure = get(r, c.structure);
     if (!structure) {
-      structure = "(No Structure)";
       blankStructure++;
+      continue;
     }
     const pri = get(r, c.pri);
     rows.push({
@@ -216,7 +216,7 @@ export function parseTitan(text: string): ParseResult {
 
   if (blankStructure > 0) {
     warnings.push(
-      `${blankStructure} line(s) had no Structure and were labelled "(No Structure)".`,
+      `${blankStructure} line(s) had no Structure and were skipped.`,
     );
   }
 
