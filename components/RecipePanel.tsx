@@ -1,5 +1,6 @@
 "use client";
 
+import ConfirmDialog, { type ConfirmReq } from "./ConfirmDialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 
@@ -28,6 +29,7 @@ export default function RecipePanel({
   onAdd: (lines: NewLine[]) => void;
 }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [confirmReq, setConfirmReq] = useState<ConfirmReq | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -146,6 +148,7 @@ export default function RecipePanel({
 
   return (
     <div className="mt-3 border-t border-slate-200 pt-3">
+      <ConfirmDialog req={confirmReq} onClose={() => setConfirmReq(null)} />
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => {
@@ -332,14 +335,17 @@ export default function RecipePanel({
                         Edit
                       </button>
                       <button
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete the recipe for ${r.product}?`,
-                            )
-                          )
-                            void persist(recipes.filter((x) => x.id !== r.id));
-                        }}
+                        onClick={() =>
+                          setConfirmReq({
+                            title: `Delete the recipe for ${r.product}?`,
+                            message:
+                              "Orders already built from it are not changed.",
+                            onConfirm: () =>
+                              void persist(
+                                recipes.filter((x) => x.id !== r.id),
+                              ),
+                          })
+                        }
                         className="text-brand-red hover:underline"
                       >
                         Delete

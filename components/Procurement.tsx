@@ -1,5 +1,6 @@
 "use client";
 
+import ConfirmDialog, { type ConfirmReq } from "./ConfirmDialog";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
@@ -409,11 +410,16 @@ export default function Procurement() {
     );
     setEditId(null);
   };
-  const deleteComponent = (c: CatItem) => {
-    if (!window.confirm(`Delete "${c.type} ${c.name}" from the list?`)) return;
-    saveCatalog(catalog.filter((x) => x.id !== c.id));
-    if (pick === c.id) setPick("");
-  };
+  const [confirmReq, setConfirmReq] = useState<ConfirmReq | null>(null);
+  const deleteComponent = (c: CatItem) =>
+    setConfirmReq({
+      title: `Delete "${c.type} ${c.name}"?`,
+      message: "This removes it from the component list.",
+      onConfirm: () => {
+        saveCatalog(catalog.filter((x) => x.id !== c.id));
+        if (pick === c.id) setPick("");
+      },
+    });
   const extraRows = extras;
   // Which lines go on paper: everything, only recipe-calculated, or only single components.
   const [printMode, setPrintMode] = useState<"all" | "recipe" | "manual">(
@@ -468,14 +474,17 @@ export default function Procurement() {
     setSel(allSelected ? new Set() : new Set(extras.map((e) => e.id)));
   const deleteSelected = () => {
     if (selIds.length === 0) return;
-    if (
-      !window.confirm(
-        `Remove ${selIds.length} line${selIds.length === 1 ? "" : "s"} from this order?`,
-      )
-    )
-      return;
-    saveExtras(extras.filter((e) => !sel.has(e.id)));
-    setSel(new Set());
+    const n = selIds.length;
+    const chosen = new Set(selIds);
+    setConfirmReq({
+      title: `Delete ${n} line${n === 1 ? "" : "s"}?`,
+      message:
+        "This removes them from the order on every computer. It can't be undone.",
+      onConfirm: () => {
+        saveExtras(extras.filter((e) => !chosen.has(e.id)));
+        setSel(new Set());
+      },
+    });
   };
   const srcOf = (e: Extra) => e.src ?? "manual";
   const nRecipe = extras.filter((e) => srcOf(e) === "recipe").length;
@@ -516,6 +525,7 @@ export default function Procurement() {
 
   return (
     <main className="mx-auto max-w-5xl p-4 print:max-w-none print:p-0">
+      <ConfirmDialog req={confirmReq} onClose={() => setConfirmReq(null)} />
       <header className="mb-5 flex flex-wrap items-center gap-4 print:hidden">
         <img src="/logo.png" alt="Lindsay Precast" className="h-20 w-auto" />
         <div className="flex-1">

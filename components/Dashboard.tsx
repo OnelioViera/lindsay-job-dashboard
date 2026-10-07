@@ -1,5 +1,6 @@
 "use client";
 
+import ConfirmDialog, { type ConfirmReq } from "./ConfirmDialog";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
@@ -233,9 +234,15 @@ export default function Dashboard() {
     }
   };
 
-  const remove = async (j: Job) => {
-    if (!window.confirm(`Delete job #${j.job_number}? This can't be undone.`))
-      return;
+  const [confirmReq, setConfirmReq] = useState<ConfirmReq | null>(null);
+  const remove = (j: Job) =>
+    setConfirmReq({
+      title: `Delete job #${j.job_number}?`,
+      message:
+        "This permanently removes the job and everything saved under it (Tracker lines, procurement order). It can't be undone.",
+      onConfirm: () => void doRemove(j),
+    });
+  const doRemove = async (j: Job) => {
     const { error } = await getSupabase().from("jobs").delete().eq("id", j.id);
     if (error) setError(error.message);
     else {
@@ -624,6 +631,7 @@ export default function Dashboard() {
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-4 sm:px-10">
+      <ConfirmDialog req={confirmReq} onClose={() => setConfirmReq(null)} />
       <header className="mb-5 flex flex-wrap items-center gap-4">
         <img src="/logo.png" alt="Lindsay Precast" className="h-20 w-auto" />
         <div className="flex-1">
