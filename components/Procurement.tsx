@@ -453,6 +453,30 @@ export default function Procurement() {
       } catch {}
       return next;
     });
+  // Tick lines to delete several at once.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const selIds = extras.filter((e) => sel.has(e.id)).map((e) => e.id);
+  const allSelected = extras.length > 0 && selIds.length === extras.length;
+  const toggleSel = (id: string) =>
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSel(allSelected ? new Set() : new Set(extras.map((e) => e.id)));
+  const deleteSelected = () => {
+    if (selIds.length === 0) return;
+    if (
+      !window.confirm(
+        `Remove ${selIds.length} line${selIds.length === 1 ? "" : "s"} from this order?`,
+      )
+    )
+      return;
+    saveExtras(extras.filter((e) => !sel.has(e.id)));
+    setSel(new Set());
+  };
   const srcOf = (e: Extra) => e.src ?? "manual";
   const nRecipe = extras.filter((e) => srcOf(e) === "recipe").length;
   const nManual = extras.length - nRecipe;
@@ -953,9 +977,34 @@ export default function Procurement() {
           <h2 className="mt-4 mb-2 text-lg font-semibold text-navy">
             Components
           </h2>
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-sm print:hidden">
+            <label className="flex items-center gap-2 font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+              />
+              Select all
+            </label>
+            <button
+              onClick={deleteSelected}
+              disabled={selIds.length === 0}
+              className="rounded-md border border-brand-red px-3 py-1.5 font-medium text-brand-red hover:bg-red-50 disabled:opacity-40"
+            >
+              Delete selected ({selIds.length})
+            </button>
+          </div>
           <table className="w-full border-collapse text-sm">
             <thead className="bg-navy text-left text-white">
               <tr>
+                <th className="w-8 px-2 py-2 print:hidden">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <th className="w-16 px-2 py-2 print:hidden" />
                 <th data-pc="item" className="px-3 py-2">
                   Item
@@ -1003,6 +1052,14 @@ export default function Procurement() {
                         : ""
                   }`}
                 >
+                  <td className="px-2 py-1.5 print:hidden">
+                    <input
+                      type="checkbox"
+                      aria-label="Select line"
+                      checked={sel.has(e.id)}
+                      onChange={() => toggleSel(e.id)}
+                    />
+                  </td>
                   <td className="px-2 py-1.5 whitespace-nowrap print:hidden">
                     <span
                       draggable
@@ -1105,6 +1162,7 @@ export default function Procurement() {
                 </tr>
               ))}
               <tr className="font-semibold">
+                <td className="print:hidden" />
                 <td className="print:hidden" />
                 <td data-pc="item" className="px-3 py-2">
                   Total
