@@ -300,6 +300,7 @@ export default function Tracker() {
 
   // Columns left off the printout (remembered on this computer).
   const PRINT_COLS: [string, string][] = [
+    ["num", "#"],
     ["priority", "Priority"],
     ["structure", "Structure ID"],
     ["product", "Product"],
@@ -538,7 +539,7 @@ export default function Tracker() {
         } – ${dateTo ? fmtDate(dateTo) : "…"}`
       : "";
 
-  const COLS = 12;
+  const COLS = 13;
 
   const headingText =
     printTitle || (picked ? "Schedule to pour" : "Structure Tracker");
@@ -989,6 +990,9 @@ export default function Tracker() {
                   aria-label="Select all shown lines"
                 />
               </th>
+              <th data-col="num" className="px-2 py-2 print:px-1.5">
+                #
+              </th>
               <th data-col="priority" className="px-2 py-2 print:px-1.5">
                 Priority
               </th>
@@ -1106,6 +1110,12 @@ export default function Tracker() {
                           aria-label={`Select ${r.structure}: ${r.description ?? ""}`}
                         />
                       )}
+                    </td>
+                    <td
+                      data-col="num"
+                      className="px-2 py-2 text-slate-500 tabular-nums print:px-1.5"
+                    >
+                      {isHeader ? gi + 1 : ""}
                     </td>
                     <td
                       data-col="priority"
