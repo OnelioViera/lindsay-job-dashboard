@@ -424,6 +424,35 @@ export default function Procurement() {
     window.addEventListener("afterprint", reset);
     return () => window.removeEventListener("afterprint", reset);
   }, []);
+  // Columns left off the printout (remembered on this computer).
+  const PRINT_COLS: [string, string][] = [
+    ["item", "Item"],
+    ["structure", "Structure / job"],
+    ["qty", "Qty"],
+    ["cost", "Unit cost"],
+    ["total", "Total cost"],
+    ["weight", "Weight"],
+  ];
+  const [noPrint, setNoPrint] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("proc-print-cols-hidden");
+      if (v) setNoPrint(new Set(JSON.parse(v) as string[]));
+    } catch {}
+  }, []);
+  const togglePrintCol = (k: string) =>
+    setNoPrint((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      try {
+        localStorage.setItem(
+          "proc-print-cols-hidden",
+          JSON.stringify([...next]),
+        );
+      } catch {}
+      return next;
+    });
   const srcOf = (e: Extra) => e.src ?? "manual";
   const nRecipe = extras.filter((e) => srcOf(e) === "recipe").length;
   const nManual = extras.length - nRecipe;
@@ -486,6 +515,27 @@ export default function Procurement() {
           >
             Structure Tracker
           </Link>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:border-navy hover:text-navy">
+              Print columns ({PRINT_COLS.length - noPrint.size}/
+              {PRINT_COLS.length})
+            </summary>
+            <div className="absolute right-0 z-30 mt-1 w-56 rounded-md border border-slate-300 bg-white p-3 text-sm shadow-lg">
+              <p className="mb-2 text-xs text-slate-500">
+                Ticked columns are printed.
+              </p>
+              {PRINT_COLS.map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={!noPrint.has(k)}
+                    onChange={() => togglePrintCol(k)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </details>
           <button
             onClick={() => printLines("manual")}
             disabled={nManual === 0}
@@ -873,6 +923,9 @@ export default function Procurement() {
         </div>
       </section>
 
+      <style>{`@media print{${[...noPrint]
+        .map((k) => `[data-pc="${k}"]{display:none !important}`)
+        .join("")}}`}</style>
       <div className="hidden items-center gap-4 border-b-2 border-navy pb-3 print:flex">
         <img src="/logo.png" alt="Lindsay Precast" className="h-16 w-auto" />
         <div className="flex-1">
@@ -904,12 +957,24 @@ export default function Procurement() {
             <thead className="bg-navy text-left text-white">
               <tr>
                 <th className="w-16 px-2 py-2 print:hidden" />
-                <th className="px-3 py-2">Item</th>
-                <th className="px-3 py-2">Structure / job</th>
-                <th className="px-3 py-2 text-right">Qty</th>
-                <th className="px-3 py-2 text-right">Unit cost</th>
-                <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2 text-right">Weight</th>
+                <th data-pc="item" className="px-3 py-2">
+                  Item
+                </th>
+                <th data-pc="structure" className="px-3 py-2">
+                  Structure / job
+                </th>
+                <th data-pc="qty" className="px-3 py-2 text-right">
+                  Qty
+                </th>
+                <th data-pc="cost" className="px-3 py-2 text-right">
+                  Unit cost
+                </th>
+                <th data-pc="total" className="px-3 py-2 text-right">
+                  Total
+                </th>
+                <th data-pc="weight" className="px-3 py-2 text-right">
+                  Weight
+                </th>
                 <th className="px-3 py-2 print:hidden" />
               </tr>
             </thead>
@@ -977,10 +1042,10 @@ export default function Procurement() {
                       ▼
                     </button>
                   </td>
-                  <td className="px-3 py-1.5">
+                  <td data-pc="item" className="px-3 py-1.5">
                     {e.type} {e.name}
                   </td>
-                  <td className="px-3 py-1.5">
+                  <td data-pc="structure" className="px-3 py-1.5">
                     <input
                       value={e.structure}
                       onChange={(ev) =>
@@ -991,7 +1056,7 @@ export default function Procurement() {
                     />
                     <span className="hidden print:inline">{e.structure}</span>
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td data-pc="qty" className="px-3 py-1.5 text-right">
                     <input
                       type="number"
                       min={1}
@@ -1003,7 +1068,7 @@ export default function Procurement() {
                     />
                     <span className="hidden print:inline">{e.qty}</span>
                   </td>
-                  <td className="px-3 py-1.5 text-right">
+                  <td data-pc="cost" className="px-3 py-1.5 text-right">
                     <input
                       type="number"
                       step="0.01"
@@ -1015,10 +1080,16 @@ export default function Procurement() {
                     />
                     <span className="hidden print:inline">{money(e.cost)}</span>
                   </td>
-                  <td className="px-3 py-1.5 text-right font-semibold">
+                  <td
+                    data-pc="total"
+                    className="px-3 py-1.5 text-right font-semibold"
+                  >
                     {money(e.cost * e.qty)}
                   </td>
-                  <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  <td
+                    data-pc="weight"
+                    className="px-3 py-1.5 text-right whitespace-nowrap"
+                  >
                     {(e.weight * e.qty).toLocaleString()} lb
                   </td>
                   <td className="px-3 py-1.5 text-right print:hidden">
@@ -1035,16 +1106,26 @@ export default function Procurement() {
               ))}
               <tr className="font-semibold">
                 <td className="print:hidden" />
-                <td className="px-3 py-2" colSpan={4}>
+                <td data-pc="item" className="px-3 py-2">
                   Total
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td data-pc="structure" />
+                <td data-pc="qty" className="px-3 py-2 text-right">
+                  <span className="hidden print:inline">
+                    {printed.reduce((n, e) => n + e.qty, 0)}
+                  </span>
+                </td>
+                <td data-pc="cost" />
+                <td data-pc="total" className="px-3 py-2 text-right">
                   <span className="print:hidden">{money(extraCost)}</span>
                   <span className="hidden print:inline">
                     {money(printCost)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
+                <td
+                  data-pc="weight"
+                  className="px-3 py-2 text-right whitespace-nowrap"
+                >
                   <span className="print:hidden">
                     {extraWeight.toLocaleString()} lb
                   </span>
@@ -1067,39 +1148,67 @@ export default function Procurement() {
           <table className="w-full border-collapse text-sm">
             <thead className="bg-navy text-left text-white">
               <tr>
-                <th className="px-3 py-2">Item</th>
-                <th className="px-3 py-2 text-right">Total qty</th>
-                <th className="px-3 py-2 text-right">Unit cost</th>
-                <th className="px-3 py-2 text-right">Total</th>
-                <th className="px-3 py-2 text-right">Weight</th>
+                <th data-pc="item" className="px-3 py-2">
+                  Item
+                </th>
+                <th data-pc="qty" className="px-3 py-2 text-right">
+                  Total qty
+                </th>
+                <th data-pc="cost" className="px-3 py-2 text-right">
+                  Unit cost
+                </th>
+                <th data-pc="total" className="px-3 py-2 text-right">
+                  Total
+                </th>
+                <th data-pc="weight" className="px-3 py-2 text-right">
+                  Weight
+                </th>
               </tr>
             </thead>
             <tbody>
               {summary.map((g, i) => (
                 <tr key={i} className="border-b border-slate-200">
-                  <td className="px-3 py-1.5">
+                  <td data-pc="item" className="px-3 py-1.5">
                     {g.type} {g.name}
                   </td>
-                  <td className="px-3 py-1.5 text-right font-semibold">
+                  <td
+                    data-pc="qty"
+                    className="px-3 py-1.5 text-right font-semibold"
+                  >
                     {g.qty}
                   </td>
-                  <td className="px-3 py-1.5 text-right">{money(g.cost)}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold">
+                  <td data-pc="cost" className="px-3 py-1.5 text-right">
+                    {money(g.cost)}
+                  </td>
+                  <td
+                    data-pc="total"
+                    className="px-3 py-1.5 text-right font-semibold"
+                  >
                     {money(g.cost * g.qty)}
                   </td>
-                  <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                  <td
+                    data-pc="weight"
+                    className="px-3 py-1.5 text-right whitespace-nowrap"
+                  >
                     {(g.weight * g.qty).toLocaleString()} lb
                   </td>
                 </tr>
               ))}
               <tr className="font-semibold">
-                <td className="px-3 py-2">Total</td>
-                <td className="px-3 py-2 text-right">
+                <td data-pc="item" className="px-3 py-2">
+                  Total
+                </td>
+                <td data-pc="qty" className="px-3 py-2 text-right">
                   {summary.reduce((n, g) => n + g.qty, 0)}
                 </td>
-                <td />
-                <td className="px-3 py-2 text-right">{money(printCost)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">
+                <td data-pc="cost" />
+                <td data-pc="total" className="px-3 py-2 text-right">
+                  {money(printCost)}
+                </td>
+                <td
+                  data-pc="weight"
+                  className="px-3 py-2 text-right whitespace-nowrap"
+                >
                   {printWeight.toLocaleString()} lb
                 </td>
               </tr>
