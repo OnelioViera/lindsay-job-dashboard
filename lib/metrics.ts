@@ -1,6 +1,6 @@
 // Structure-level job metrics. A structure has many lines, so everything here counts structures:
-// - scheduled to pour = at least one line has a Scheduled Date
-// - ready             = at least one line has a Ready Date
+// - scheduled to pour = has a Scheduled Date and no Pick Date yet
+// - ready             = has a Ready Date and no Pick Date yet
 // - picked            = at least one line has a Pick Date
 // - pour overdue      = Scheduled Date has passed and no line has a Ready Date yet
 // - ready overdue     = Ready Date has passed and no line has a Pick Date yet
@@ -23,7 +23,7 @@ export type QuickKey =
 export const QUICK_LABELS: Record<QuickKey, string> = {
   notScheduled: "Not scheduled to pour",
   scheduled: "Scheduled to pour",
-  ready: "With a Ready Date",
+  ready: "Ready Date",
   picked: "With a Pick Date",
   pourOverdue: "Pour date passed, not ready",
   readyOverdue: "Ready date passed, not picked",
@@ -88,9 +88,10 @@ export function analyze(lines: MetricLine[], today = todayIso()): JobMetrics {
     readyOverdue: new Set(),
   };
   for (const [name, s] of by) {
-    if (s.sch) sets.scheduled.add(name);
-    else sets.notScheduled.add(name);
-    if (s.ready) sets.ready.add(name);
+    if (!s.sch) sets.notScheduled.add(name);
+    // Once a structure has a Pick Date it has moved on to delivery.
+    if (s.sch && !s.pick) sets.scheduled.add(name);
+    if (s.ready && !s.pick) sets.ready.add(name);
     if (s.pick) sets.picked.add(name);
     if (s.firstSch && s.firstSch < today && !s.ready)
       sets.pourOverdue.add(name);

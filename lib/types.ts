@@ -29,7 +29,7 @@ export const FILTERS: {
   {
     key: "scheduled_pour",
     label: "Scheduled to pour",
-    test: (r) => !!r.sch_date,
+    test: (r) => !!r.sch_date && !r.pick_date,
   },
   {
     key: "scheduled_delivery",
