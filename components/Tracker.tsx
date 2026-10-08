@@ -522,6 +522,27 @@ export default function Tracker() {
     await load(); // reload so the screen always matches what is really in the database
   };
 
+  // Type a Pick Date (delivery date) by hand: saves it on the given lines.
+  const [bulkPick, setBulkPick] = useState("");
+  const setPick = async (ids: string[], date: string | null) => {
+    if (ids.length === 0) return;
+    const supabase = getSupabase();
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error } = await supabase
+        .from("titan_lines")
+        .update({ pick_date: date })
+        .in("id", ids.slice(i, i + 100));
+      if (error) {
+        setError(`Could not save the pick date: ${error.message}`);
+        return;
+      }
+    }
+    const set = new Set(ids);
+    setRows((prev) =>
+      prev.map((r) => (set.has(r.id) ? { ...r, pick_date: date } : r)),
+    );
+  };
+
   const activeLabels = FILTERS.filter((f) => active.has(f.key)).map(
     (f) => f.label,
   );
@@ -924,6 +945,28 @@ export default function Tracker() {
           )}
           {selectedIds.length > 0 && (
             <>
+              <span className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={bulkPick}
+                  onChange={(e) => setBulkPick(e.target.value)}
+                  aria-label="Pick date for selected"
+                  className="rounded border border-slate-300 bg-white px-2 py-1"
+                />
+                <button
+                  disabled={!bulkPick}
+                  onClick={() => void setPick(selectedIds, bulkPick)}
+                  className="rounded-md border border-navy px-3 py-1.5 font-semibold text-navy hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Set pick date
+                </button>
+                <button
+                  onClick={() => void setPick(selectedIds, null)}
+                  className="text-slate-500 hover:underline"
+                >
+                  Clear
+                </button>
+              </span>
               <button
                 onClick={() =>
                   askDelete(
@@ -1196,7 +1239,21 @@ export default function Tracker() {
                       data-col="pick"
                       className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
                     >
-                      {fmtDate(r.pick_date)}
+                      <input
+                        type="date"
+                        value={r.pick_date ?? ""}
+                        onChange={(e) =>
+                          void setPick(
+                            isHeader ? g.lines.map((l) => l.id) : [r.id],
+                            e.target.value || null,
+                          )
+                        }
+                        aria-label={`Pick date for ${r.structure}`}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-sm print:hidden"
+                      />
+                      <span className="hidden print:inline">
+                        {fmtDate(r.pick_date)}
+                      </span>
                     </td>
                     <td
                       data-col="weight"

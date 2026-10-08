@@ -136,6 +136,8 @@ export function planMerge(
     for (const f of absent) {
       if (f in stored(l)) (r as Record<string, unknown>)[f] = stored(l)[f];
     }
+    // A pick date typed in by hand survives a paste where Titan has none yet.
+    if (!r.pickDate && l.pick_date) r.pickDate = l.pick_date;
 
     const changes: Change[] = [];
     const add = (label: string, from: string, to: string, differs: boolean) => {
