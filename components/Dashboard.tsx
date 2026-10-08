@@ -609,6 +609,14 @@ export default function Dashboard() {
                 .join(" · ") || "—"}
             </p>
           </div>
+          {m && (
+            <button
+              onClick={() => window.print()}
+              className="rounded bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25"
+            >
+              Print report
+            </button>
+          )}
           <button
             onClick={() => openMetrics(null)}
             aria-label="Close metrics"
@@ -626,248 +634,360 @@ export default function Dashboard() {
     );
   };
 
+  // Print-only report for the job whose metrics are open.
+  const MetricsReport = () => {
+    if (!metricsJob) return null;
+    const m = metrics[metricsJob.id];
+    if (!m) return null;
+    const { sets } = m;
+    const natural = (a: string, b: string) =>
+      a.localeCompare(b, undefined, { numeric: true });
+    const list = (set: Set<string>) => [...set].sort(natural);
+    const sections: { title: string; names: string[]; note?: string }[] = [
+      {
+        title: "Not scheduled to pour",
+        names: list(sets.notScheduled),
+      },
+      { title: "Scheduled to pour", names: list(sets.scheduled) },
+      {
+        title: "Ready Date (not yet picked)",
+        names: list(sets.ready),
+        note: m.nextReady ? `Next ready date ${fmtShort(m.nextReady)}` : "",
+      },
+      {
+        title: "Pick Date set",
+        names: list(sets.picked),
+        note: m.nextPick ? `Next pick date ${fmtShort(m.nextPick)}` : "",
+      },
+      {
+        title: "Overdue: pour date passed, not ready",
+        names: list(sets.pourOverdue),
+      },
+      {
+        title: "Overdue: ready date passed, not picked",
+        names: list(sets.readyOverdue),
+      },
+    ];
+    const printedOn = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    return (
+      <div className="hidden text-slate-900 print:block">
+        <div className="mb-4 flex items-center gap-4 border-b-2 border-navy pb-3">
+          <img src="/logo.png" alt="Lindsay Precast" className="h-14 w-auto" />
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-navy">Job Metrics Report</h1>
+            <p className="text-sm">
+              Job #{metricsJob.job_number}
+              {metricsJob.location ? ` · ${metricsJob.location}` : ""}
+              {metricsJob.customer ? ` · ${metricsJob.customer}` : ""}
+            </p>
+          </div>
+          <p className="text-right text-xs text-slate-600">
+            Printed {printedOn}
+            <br />
+            {m.total} structure{m.total === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        <table className="mb-5 w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-navy text-left text-white">
+              <th className="px-2 py-1.5">Status</th>
+              <th className="px-2 py-1.5 text-right">Structures</th>
+              <th className="px-2 py-1.5 text-right">% of job</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sections.map((x) => (
+              <tr key={x.title} className="border-b border-slate-300">
+                <td className="px-2 py-1.5">
+                  {x.title}
+                  {x.note ? (
+                    <span className="text-xs text-slate-600"> · {x.note}</span>
+                  ) : null}
+                </td>
+                <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                  {x.names.length}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums">
+                  {Math.round((x.names.length / Math.max(m.total, 1)) * 100)}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {sections
+          .filter((x) => x.names.length > 0)
+          .map((x) => (
+            <div key={x.title} className="mb-4 break-inside-avoid">
+              <h2 className="mb-1 border-b border-slate-300 text-sm font-bold text-navy">
+                {x.title} ({x.names.length})
+              </h2>
+              <p className="text-xs leading-relaxed">{x.names.join(", ")}</p>
+            </div>
+          ))}
+        <p className="mt-4 text-xs text-slate-500">
+          Counts are structures (a structure counts once). Based on the last
+          Titan paste and any pick dates entered by hand.
+        </p>
+      </div>
+    );
+  };
+
   const field =
     "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20";
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-4 sm:px-10">
-      <ConfirmDialog req={confirmReq} onClose={() => setConfirmReq(null)} />
-      <header className="mb-5 flex flex-wrap items-center gap-4">
-        <img src="/logo.png" alt="Lindsay Precast" className="h-20 w-auto" />
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
-          <p className="text-sm text-slate-600">
-            Your jobs. Open one to see its Structure Tracker or Procurement
-            Order.
-          </p>
-        </div>
-        <BackButton />
-        <UserBadge />
-        <button
-          onClick={() => void getSupabase().auth.signOut()}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-white"
-        >
-          Sign out
-        </button>
-      </header>
-
-      {error && (
-        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 font-semibold text-navy">
-          {editId ? "Edit job" : "Add a job"}
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="text-sm">
-            <span className="font-medium text-navy">Job #</span>
-            <input
-              value={form.job_number}
-              onChange={(e) => setForm({ ...form, job_number: e.target.value })}
-              className={field}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="font-medium text-navy">Job location</span>
-            <input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className={field}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="font-medium text-navy">Customer</span>
-            <input
-              value={form.customer}
-              onChange={(e) => setForm({ ...form, customer: e.target.value })}
-              className={field}
-            />
-          </label>
-        </div>
-        <div className="mt-3 flex gap-2">
+    <>
+      <main className="mx-auto max-w-7xl px-6 py-4 sm:px-10 print:hidden">
+        <ConfirmDialog req={confirmReq} onClose={() => setConfirmReq(null)} />
+        <header className="mb-5 flex flex-wrap items-center gap-4">
+          <img src="/logo.png" alt="Lindsay Precast" className="h-20 w-auto" />
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-navy">Dashboard</h1>
+            <p className="text-sm text-slate-600">
+              Your jobs. Open one to see its Structure Tracker or Procurement
+              Order.
+            </p>
+          </div>
+          <BackButton />
+          <UserBadge />
           <button
-            onClick={save}
-            disabled={busy || !form.job_number.trim()}
-            className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50"
+            onClick={() => void getSupabase().auth.signOut()}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-white"
           >
-            {busy ? "Saving…" : editId ? "Save changes" : "Add job"}
+            Sign out
           </button>
-          {editId && (
-            <button
-              onClick={cancelEdit}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </section>
+        </header>
 
-      <div className="mb-3 inline-flex overflow-hidden rounded-md border border-navy text-sm">
-        {[
-          { archived: false, label: `Active (${activeCount})` },
-          { archived: true, label: `Archived (${archivedCount})` },
-        ].map((t) => (
-          <button
-            key={t.label}
-            onClick={() => setShowArchived(t.archived)}
-            aria-pressed={showArchived === t.archived}
-            className={`px-4 py-2 font-medium ${
-              showArchived === t.archived
-                ? "bg-navy text-white"
-                : "bg-white text-navy"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search jobs…"
-          className="w-64 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-        />
-        <span className="text-sm text-slate-600">
-          {shown.length} job{shown.length === 1 ? "" : "s"}
-          {canDrag && shown.length > 1
-            ? " · drag groups or jobs to reorder"
-            : shown.length > 1
-              ? " · clear search to reorder"
-              : ""}
-        </span>
-        {groups.length > 0 && (
-          <button
-            onClick={() =>
-              saveCollapsed(
-                groups.every((g) => collapsed.has(g.key))
-                  ? new Set()
-                  : new Set(groups.map((g) => g.key)),
-              )
-            }
-            className="text-sm font-medium text-navy underline"
-          >
-            {groups.every((g) => collapsed.has(g.key))
-              ? "Expand all"
-              : "Collapse all"}
-          </button>
+        {error && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+          </div>
         )}
-        <div
-          className="ml-auto inline-flex overflow-hidden rounded-md border border-navy text-sm"
-          role="group"
-          aria-label="View"
-        >
-          {(["cards", "rows"] as View[]).map((v) => (
+
+        <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 font-semibold text-navy">
+            {editId ? "Edit job" : "Add a job"}
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm">
+              <span className="font-medium text-navy">Job #</span>
+              <input
+                value={form.job_number}
+                onChange={(e) =>
+                  setForm({ ...form, job_number: e.target.value })
+                }
+                className={field}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="font-medium text-navy">Job location</span>
+              <input
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                className={field}
+              />
+            </label>
+            <label className="text-sm">
+              <span className="font-medium text-navy">Customer</span>
+              <input
+                value={form.customer}
+                onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                className={field}
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex gap-2">
             <button
-              key={v}
-              onClick={() => pickView(v)}
-              aria-pressed={view === v}
+              onClick={save}
+              disabled={busy || !form.job_number.trim()}
+              className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-50"
+            >
+              {busy ? "Saving…" : editId ? "Save changes" : "Add job"}
+            </button>
+            {editId && (
+              <button
+                onClick={cancelEdit}
+                className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </section>
+
+        <div className="mb-3 inline-flex overflow-hidden rounded-md border border-navy text-sm">
+          {[
+            { archived: false, label: `Active (${activeCount})` },
+            { archived: true, label: `Archived (${archivedCount})` },
+          ].map((t) => (
+            <button
+              key={t.label}
+              onClick={() => setShowArchived(t.archived)}
+              aria-pressed={showArchived === t.archived}
               className={`px-4 py-2 font-medium ${
-                view === v ? "bg-navy text-white" : "bg-white text-navy"
+                showArchived === t.archived
+                  ? "bg-navy text-white"
+                  : "bg-white text-navy"
               }`}
             >
-              {v === "cards" ? "Cards" : "Rows"}
+              {t.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {loading ? (
-        <p className="p-6 text-slate-600">Loading…</p>
-      ) : shown.length === 0 ? (
-        <p className="rounded-md border border-slate-200 bg-white p-6 text-slate-600">
-          {viewJobs.length > 0
-            ? "No jobs match your search."
-            : showArchived
-              ? "No archived jobs."
-              : jobs.length === 0
-                ? "No jobs yet. Add your first job above."
-                : "No active jobs. Check the Archived tab."}
-        </p>
-      ) : (
-        <div className="space-y-6">
-          {groups.map((g) => (
-            <section key={g.key}>
-              {groupHeader(g)}
-              {collapsed.has(g.key) ? null : view === "cards" ? (
-                <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {g.jobs.map((j) => (
-                    <article
-                      key={j.id}
-                      {...jobDrag(j.id, g.key)}
-                      className={`flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${jobState(j.id)}`}
-                    >
-                      <div>
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Job #
-                        </p>
-                        <p className="text-xl font-bold text-navy">
-                          {j.job_number}
-                        </p>
-                      </div>
-                      <div className="text-sm">
-                        <p>
-                          <span className="text-slate-500">Location:</span>{" "}
-                          {j.location || "—"}
-                        </p>
-                        <p>
-                          <span className="text-slate-500">Customer:</span>{" "}
-                          {j.customer || "—"}
-                        </p>
-                      </div>
-                      <div className="mt-auto [&>div]:justify-start">
-                        {actions(j)}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-b-xl border border-t-0 border-slate-200 bg-white shadow-sm">
-                  <table className="w-full table-fixed text-left text-sm">
-                    <thead className="bg-slate-100 text-slate-700">
-                      <tr>
-                        <th className="w-32 px-3 py-2">Job #</th>
-                        <th className="w-[20%] px-3 py-2">Job location</th>
-                        <th className="w-[13%] px-3 py-2">Customer</th>
-                        <th className="px-3 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {g.jobs.map((j) => (
-                        <tr
-                          key={j.id}
-                          {...jobDrag(j.id, g.key)}
-                          className={`border-t border-slate-200 ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${jobState(j.id)}`}
-                        >
-                          <td className="px-3 py-2 font-semibold text-navy">
-                            {canDrag && (
-                              <span className="mr-2 text-slate-400" aria-hidden>
-                                ⋮⋮
-                              </span>
-                            )}
-                            {j.job_number}
-                          </td>
-                          <td className="px-3 py-2">{j.location || "—"}</td>
-                          <td className="px-3 py-2">{j.customer || "—"}</td>
-                          <td className="px-3 py-2 [&>div]:flex-nowrap [&>div]:whitespace-nowrap">
-                            {actions(j)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          ))}
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search jobs…"
+            className="w-64 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+          />
+          <span className="text-sm text-slate-600">
+            {shown.length} job{shown.length === 1 ? "" : "s"}
+            {canDrag && shown.length > 1
+              ? " · drag groups or jobs to reorder"
+              : shown.length > 1
+                ? " · clear search to reorder"
+                : ""}
+          </span>
+          {groups.length > 0 && (
+            <button
+              onClick={() =>
+                saveCollapsed(
+                  groups.every((g) => collapsed.has(g.key))
+                    ? new Set()
+                    : new Set(groups.map((g) => g.key)),
+                )
+              }
+              className="text-sm font-medium text-navy underline"
+            >
+              {groups.every((g) => collapsed.has(g.key))
+                ? "Expand all"
+                : "Collapse all"}
+            </button>
+          )}
+          <div
+            className="ml-auto inline-flex overflow-hidden rounded-md border border-navy text-sm"
+            role="group"
+            aria-label="View"
+          >
+            {(["cards", "rows"] as View[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => pickView(v)}
+                aria-pressed={view === v}
+                className={`px-4 py-2 font-medium ${
+                  view === v ? "bg-navy text-white" : "bg-white text-navy"
+                }`}
+              >
+                {v === "cards" ? "Cards" : "Rows"}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
-      {MetricsPanel()}
-    </main>
+
+        {loading ? (
+          <p className="p-6 text-slate-600">Loading…</p>
+        ) : shown.length === 0 ? (
+          <p className="rounded-md border border-slate-200 bg-white p-6 text-slate-600">
+            {viewJobs.length > 0
+              ? "No jobs match your search."
+              : showArchived
+                ? "No archived jobs."
+                : jobs.length === 0
+                  ? "No jobs yet. Add your first job above."
+                  : "No active jobs. Check the Archived tab."}
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {groups.map((g) => (
+              <section key={g.key}>
+                {groupHeader(g)}
+                {collapsed.has(g.key) ? null : view === "cards" ? (
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {g.jobs.map((j) => (
+                      <article
+                        key={j.id}
+                        {...jobDrag(j.id, g.key)}
+                        className={`flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${jobState(j.id)}`}
+                      >
+                        <div>
+                          <p className="text-xs tracking-wide text-slate-500 uppercase">
+                            Job #
+                          </p>
+                          <p className="text-xl font-bold text-navy">
+                            {j.job_number}
+                          </p>
+                        </div>
+                        <div className="text-sm">
+                          <p>
+                            <span className="text-slate-500">Location:</span>{" "}
+                            {j.location || "—"}
+                          </p>
+                          <p>
+                            <span className="text-slate-500">Customer:</span>{" "}
+                            {j.customer || "—"}
+                          </p>
+                        </div>
+                        <div className="mt-auto [&>div]:justify-start">
+                          {actions(j)}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-b-xl border border-t-0 border-slate-200 bg-white shadow-sm">
+                    <table className="w-full table-fixed text-left text-sm">
+                      <thead className="bg-slate-100 text-slate-700">
+                        <tr>
+                          <th className="w-32 px-3 py-2">Job #</th>
+                          <th className="w-[20%] px-3 py-2">Job location</th>
+                          <th className="w-[13%] px-3 py-2">Customer</th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.jobs.map((j) => (
+                          <tr
+                            key={j.id}
+                            {...jobDrag(j.id, g.key)}
+                            className={`border-t border-slate-200 ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${jobState(j.id)}`}
+                          >
+                            <td className="px-3 py-2 font-semibold text-navy">
+                              {canDrag && (
+                                <span
+                                  className="mr-2 text-slate-400"
+                                  aria-hidden
+                                >
+                                  ⋮⋮
+                                </span>
+                              )}
+                              {j.job_number}
+                            </td>
+                            <td className="px-3 py-2">{j.location || "—"}</td>
+                            <td className="px-3 py-2">{j.customer || "—"}</td>
+                            <td className="px-3 py-2 [&>div]:flex-nowrap [&>div]:whitespace-nowrap">
+                              {actions(j)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+        {MetricsPanel()}
+      </main>
+      {MetricsReport()}
+    </>
   );
 }
