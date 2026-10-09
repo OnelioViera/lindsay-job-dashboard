@@ -322,6 +322,23 @@ export default function Tracker() {
   }, []);
   // Title on the printout / saved PDF ("" = automatic).
   const [printTitle, setPrintTitle] = useState("");
+  // Notes to the customer: printed under the table. Kept per job on this computer.
+  const [notes, setNotes] = useState("");
+  useEffect(() => {
+    if (!jobId) return;
+    try {
+      setNotes(localStorage.getItem(`tracker-notes:${jobId}`) ?? "");
+    } catch {}
+  }, [jobId]);
+  const changeNotes = (v: string) => {
+    setNotes(v);
+    try {
+      if (jobId) {
+        if (v) localStorage.setItem(`tracker-notes:${jobId}`, v);
+        else localStorage.removeItem(`tracker-notes:${jobId}`);
+      }
+    } catch {}
+  };
   useEffect(() => {
     try {
       setPrintTitle(localStorage.getItem("print-title") ?? "");
@@ -858,6 +875,24 @@ export default function Tracker() {
         </div>
       </section>
 
+      {rows.length > 0 && (
+        <label className="mb-3 block text-sm print:hidden">
+          <span className="font-medium text-navy">
+            Notes to the customer{" "}
+            <span className="font-normal text-slate-500">
+              (printed under the table; saved for this job on this computer)
+            </span>
+          </span>
+          <textarea
+            value={notes}
+            onChange={(e) => changeNotes(e.target.value)}
+            rows={3}
+            placeholder="e.g. Pick-up window 7am–3pm. Please bring a rigging crew and call 24 hours ahead."
+            className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20"
+          />
+        </label>
+      )}
+
       {/* Delete toolbar */}
       {rows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 text-sm print:hidden">
@@ -1318,6 +1353,15 @@ export default function Tracker() {
           </tbody>
         </table>
       </section>
+
+      {notes.trim() && (
+        <div className="mt-4 hidden break-inside-avoid text-sm text-slate-900 print:block">
+          <p className="mb-1 border-b border-slate-400 font-bold text-navy">
+            Notes
+          </p>
+          <p className="whitespace-pre-wrap">{notes.trim()}</p>
+        </div>
+      )}
 
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
