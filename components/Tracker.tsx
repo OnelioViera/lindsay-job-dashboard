@@ -1111,12 +1111,18 @@ export default function Tracker() {
             )}
             {groups.flatMap((g, gi) => {
               const open = expanded.has(g.structure);
-              const shown = open ? g.lines : [g.header];
-              return shown.map((r) => {
-                const isHeader = r.id === g.header.id;
+              // The top row is the structure: its Weight is the total of all its lines.
+              // Opened, every line (including the first) is listed beneath it.
+              const shown =
+                open && g.lines.length > 1
+                  ? [g.header, ...g.lines]
+                  : [g.header];
+              const total = g.lines.reduce((n, l) => n + (l.weight ?? 0), 0);
+              return shown.map((r, idx) => {
+                const isHeader = idx === 0;
                 return (
                   <tr
-                    key={r.id}
+                    key={`${r.id}-${idx}`}
                     className={`align-top ${
                       isHeader
                         ? "border-t border-slate-200 font-medium"
@@ -1259,7 +1265,16 @@ export default function Tracker() {
                       data-col="weight"
                       className="px-2 py-2 text-right tabular-nums print:px-1.5"
                     >
-                      {fmtWeight(r.weight)}
+                      {isHeader && g.lines.length > 1 ? (
+                        <span
+                          className="font-semibold"
+                          title={`Total of ${g.lines.length} lines`}
+                        >
+                          {fmtWeight(total)}
+                        </span>
+                      ) : (
+                        fmtWeight(r.weight)
+                      )}
                     </td>
                     <td data-col="uom" className="px-2 py-2 print:px-1.5">
                       {r.uom}
