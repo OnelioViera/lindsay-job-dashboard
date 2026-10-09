@@ -46,6 +46,33 @@ export default function Logistics() {
   const [form, setForm] = useState(blank);
   const [error, setError] = useState<string | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [noPrint, setNoPrint] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("logistics-print-hidden");
+      if (v) setNoPrint(new Set(JSON.parse(v)));
+    } catch {}
+  }, []);
+  const togglePrint = (k: string) =>
+    setNoPrint((cur) => {
+      const next = new Set(cur);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      try {
+        localStorage.setItem(
+          "logistics-print-hidden",
+          JSON.stringify([...next]),
+        );
+      } catch {}
+      return next;
+    });
+  const skip = (k: string) => (noPrint.has(k) ? "print:hidden" : "");
+  const PRINT_SECTIONS: [string, string][] = [
+    ["sum", "Delivery summary"],
+    ["day", "Delivery schedule by day"],
+    ["yard", "Yard and risk list"],
+    ["load", "Truckload grouping"],
+  ];
   const ready = useRef(false); // settings loaded; changes after this get saved
 
   const limit = Math.max(
@@ -238,6 +265,22 @@ export default function Logistics() {
             </div>
 
             <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
+              Print these sections
+            </h2>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+              {PRINT_SECTIONS.map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!noPrint.has(k)}
+                    onChange={() => togglePrint(k)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+
+            <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
               Add a delivery by hand
             </h2>
             <div className="flex flex-wrap items-end gap-2">
@@ -348,237 +391,246 @@ export default function Logistics() {
             {items.length > 0 && (
               <>
                 {/* 2. Delivery summary */}
-                <h3 className={heading}>Delivery summary</h3>
-                <table className="mb-5 w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-navy text-white">
-                      <th className={th}>Status</th>
-                      <th className={`${th} text-right`}>Structures</th>
-                      <th className={`${th} text-right`}>Weight</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["Already picked (pick date passed)", r.picked],
-                      ["Scheduled for delivery", r.scheduled],
-                      ["Ready, no pick date (in the yard)", r.yard],
-                      ["Not ready yet", r.notReady],
-                    ].map(([label, xs]) => (
-                      <tr
-                        key={label as string}
-                        className="border-b border-slate-300"
-                      >
-                        <td className={td}>{label as string}</td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {(xs as unknown[]).length}
-                        </td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {lb(sumW(xs as { weight: number }[]))}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="font-bold">
-                      <td className={td}>Whole job</td>
-                      <td className={`${td} text-right tabular-nums`}>
-                        {r.total}
-                      </td>
-                      <td className={`${td} text-right tabular-nums`}>
-                        {lb(r.totalWeight)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                {/* 3. Delivery schedule by day */}
-                <h3 className={heading}>Delivery schedule by day</h3>
-                {r.days.length === 0 ? (
-                  <p className="mb-5 text-sm text-slate-600">
-                    Nothing is scheduled for delivery from today on.
-                  </p>
-                ) : (
+                <div className={skip("sum")}>
+                  <h3 className={heading}>Delivery summary</h3>
                   <table className="mb-5 w-full border-collapse text-sm">
                     <thead>
                       <tr className="bg-navy text-white">
-                        <th className={th}>Delivery date</th>
+                        <th className={th}>Status</th>
                         <th className={`${th} text-right`}>Structures</th>
                         <th className={`${th} text-right`}>Weight</th>
-                        <th className={`${th} text-right`}>Truckloads</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {r.days.map((d) => (
-                        <Fragment key={d.date}>
-                          <tr className="border-t-2 border-slate-400 bg-slate-100 font-semibold">
-                            <td className={td}>
-                              {dow(d.date)} {us(d.date)}
-                              {d.date === today && (
-                                <span className="ml-2 text-xs font-semibold text-brand-red">
-                                  today
-                                </span>
-                              )}
-                            </td>
-                            <td className={`${td} text-right tabular-nums`}>
-                              {d.items.length}
-                            </td>
-                            <td className={`${td} text-right tabular-nums`}>
-                              {lb(d.weight)}
-                            </td>
-                            <td className={`${td} text-right tabular-nums`}>
-                              {d.loads.length}
-                            </td>
-                          </tr>
-                          {d.items.map((it) => (
-                            <tr
-                              key={it.key}
-                              className="border-b border-slate-200 text-xs"
-                            >
-                              <td className={`${td} pl-6`}>
-                                <span className="font-medium">{it.name}</span>
-                                {it.description ? ` — ${it.description}` : ""}
-                              </td>
-                              <td className={td}></td>
-                              <td className={`${td} text-right tabular-nums`}>
-                                {lb(it.weight)}
-                              </td>
-                              <td className={`${td} text-right`}>
-                                Load{" "}
-                                {d.loads.findIndex((l) =>
-                                  l.items.includes(it),
-                                ) + 1}
-                              </td>
-                            </tr>
-                          ))}
-                        </Fragment>
+                      {[
+                        ["Already picked (pick date passed)", r.picked],
+                        ["Scheduled for delivery", r.scheduled],
+                        ["Ready, no pick date (in the yard)", r.yard],
+                        ["Not ready yet", r.notReady],
+                      ].map(([label, xs]) => (
+                        <tr
+                          key={label as string}
+                          className="border-b border-slate-300"
+                        >
+                          <td className={td}>{label as string}</td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {(xs as unknown[]).length}
+                          </td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {lb(sumW(xs as { weight: number }[]))}
+                          </td>
+                        </tr>
                       ))}
                       <tr className="font-bold">
-                        <td className={td}>Total</td>
+                        <td className={td}>Whole job</td>
                         <td className={`${td} text-right tabular-nums`}>
-                          {r.scheduled.length}
+                          {r.total}
                         </td>
                         <td className={`${td} text-right tabular-nums`}>
-                          {lb(sumW(r.scheduled))}
-                        </td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {totalLoads}
+                          {lb(r.totalWeight)}
                         </td>
                       </tr>
                     </tbody>
                   </table>
-                )}
-
-                {/* 4. Yard and risk list */}
-                <h3 className={heading}>Yard and risk list</h3>
-                <div className="mb-5 space-y-3 text-sm">
-                  <div>
-                    <p className="font-semibold">
-                      Ready but no pick date ({r.yard.length})
+                </div>
+                {/* 3. Delivery schedule by day */}
+                <div className={skip("day")}>
+                  <h3 className={heading}>Delivery schedule by day</h3>
+                  {r.days.length === 0 ? (
+                    <p className="mb-5 text-sm text-slate-600">
+                      Nothing is scheduled for delivery from today on.
                     </p>
-                    {r.yard.length === 0 ? (
-                      <p className="text-slate-600">None.</p>
-                    ) : (
-                      <table className="w-full border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-400 text-left">
-                            <th className={th}>Structure</th>
-                            <th className={th}>Description</th>
-                            <th className={th}>Ready date</th>
-                            <th className={`${th} text-right`}>Waiting</th>
-                            <th className={`${th} text-right`}>Weight</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {r.yard.map((i) => (
-                            <tr
-                              key={i.key}
-                              className="border-b border-slate-200"
-                            >
-                              <td className={`${td} font-medium`}>{i.name}</td>
-                              <td className={td}>{i.description}</td>
-                              <td className={td}>{us(i.ready)}</td>
-                              <td className={`${td} text-right tabular-nums`}>
-                                {i.waiting === 0
-                                  ? "today"
-                                  : n(i.waiting, "day")}
+                  ) : (
+                    <table className="mb-5 w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-navy text-white">
+                          <th className={th}>Delivery date</th>
+                          <th className={`${th} text-right`}>Structures</th>
+                          <th className={`${th} text-right`}>Weight</th>
+                          <th className={`${th} text-right`}>Truckloads</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {r.days.map((d) => (
+                          <Fragment key={d.date}>
+                            <tr className="border-t-2 border-slate-400 bg-slate-100 font-semibold">
+                              <td className={td}>
+                                {dow(d.date)} {us(d.date)}
+                                {d.date === today && (
+                                  <span className="ml-2 text-xs font-semibold text-brand-red">
+                                    today
+                                  </span>
+                                )}
                               </td>
                               <td className={`${td} text-right tabular-nums`}>
-                                {lb(i.weight)}
+                                {d.items.length}
+                              </td>
+                              <td className={`${td} text-right tabular-nums`}>
+                                {lb(d.weight)}
+                              </td>
+                              <td className={`${td} text-right tabular-nums`}>
+                                {d.loads.length}
                               </td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-semibold">
-                      Pick date is before the ready date ({r.early.length})
-                    </p>
-                    {r.early.length === 0 ? (
-                      <p className="text-slate-600">None.</p>
-                    ) : (
-                      <p className="text-xs">
-                        {r.early
-                          .map(
-                            (i) =>
-                              `${i.name} (pick ${us(i.pick)}, ready ${us(i.ready)})`,
-                          )
-                          .join("; ")}
+                            {d.items.map((it) => (
+                              <tr
+                                key={it.key}
+                                className="border-b border-slate-200 text-xs"
+                              >
+                                <td className={`${td} pl-6`}>
+                                  <span className="font-medium">{it.name}</span>
+                                  {it.description ? ` — ${it.description}` : ""}
+                                </td>
+                                <td className={td}></td>
+                                <td className={`${td} text-right tabular-nums`}>
+                                  {lb(it.weight)}
+                                </td>
+                                <td className={`${td} text-right`}>
+                                  Load{" "}
+                                  {d.loads.findIndex((l) =>
+                                    l.items.includes(it),
+                                  ) + 1}
+                                </td>
+                              </tr>
+                            ))}
+                          </Fragment>
+                        ))}
+                        <tr className="font-bold">
+                          <td className={td}>Total</td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {r.scheduled.length}
+                          </td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {lb(sumW(r.scheduled))}
+                          </td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {totalLoads}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                {/* 4. Yard and risk list */}
+                <div className={skip("yard")}>
+                  <h3 className={heading}>Yard and risk list</h3>
+                  <div className="mb-5 space-y-3 text-sm">
+                    <div>
+                      <p className="font-semibold">
+                        Ready but no pick date ({r.yard.length})
                       </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-semibold">
-                      Heavier than one truckload ({r.overLimit.length})
-                    </p>
-                    {r.overLimit.length === 0 ? (
-                      <p className="text-slate-600">None.</p>
-                    ) : (
-                      <p className="text-xs">
-                        {r.overLimit
-                          .map((i) => `${i.name} (${lb(i.weight)})`)
-                          .join("; ")}
+                      {r.yard.length === 0 ? (
+                        <p className="text-slate-600">None.</p>
+                      ) : (
+                        <table className="w-full border-collapse text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-400 text-left">
+                              <th className={th}>Structure</th>
+                              <th className={th}>Description</th>
+                              <th className={th}>Ready date</th>
+                              <th className={`${th} text-right`}>Waiting</th>
+                              <th className={`${th} text-right`}>Weight</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.yard.map((i) => (
+                              <tr
+                                key={i.key}
+                                className="border-b border-slate-200"
+                              >
+                                <td className={`${td} font-medium`}>
+                                  {i.name}
+                                </td>
+                                <td className={td}>{i.description}</td>
+                                <td className={td}>{us(i.ready)}</td>
+                                <td className={`${td} text-right tabular-nums`}>
+                                  {i.waiting === 0
+                                    ? "today"
+                                    : n(i.waiting, "day")}
+                                </td>
+                                <td className={`${td} text-right tabular-nums`}>
+                                  {lb(i.weight)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold">
+                        Pick date is before the ready date ({r.early.length})
                       </p>
-                    )}
+                      {r.early.length === 0 ? (
+                        <p className="text-slate-600">None.</p>
+                      ) : (
+                        <p className="text-xs">
+                          {r.early
+                            .map(
+                              (i) =>
+                                `${i.name} (pick ${us(i.pick)}, ready ${us(i.ready)})`,
+                            )
+                            .join("; ")}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold">
+                        Heavier than one truckload ({r.overLimit.length})
+                      </p>
+                      {r.overLimit.length === 0 ? (
+                        <p className="text-slate-600">None.</p>
+                      ) : (
+                        <p className="text-xs">
+                          {r.overLimit
+                            .map((i) => `${i.name} (${lb(i.weight)})`)
+                            .join("; ")}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-
                 {/* 5. Truckload grouping */}
-                <h3 className={heading}>Truckload grouping</h3>
-                <p className="mb-2 text-xs text-slate-600">
-                  Structures on the same day are packed into loads of no more
-                  than {lb(limit)}, heaviest first. A structure is never split
-                  between trucks.
-                </p>
-                {r.days.length === 0 && (
-                  <p className="text-sm text-slate-600">
-                    No upcoming deliveries.
+                <div className={skip("load")}>
+                  <h3 className={heading}>Truckload grouping</h3>
+                  <p className="mb-2 text-xs text-slate-600">
+                    Structures on the same day are packed into loads of no more
+                    than {lb(limit)}, heaviest first. A structure is never split
+                    between trucks.
                   </p>
-                )}
-                {r.days.map((d) => (
-                  <div key={d.date} className="mb-3 break-inside-avoid text-sm">
-                    <p className="font-semibold text-navy">
-                      {dow(d.date)} {us(d.date)} — {n(d.loads.length, "load")},{" "}
-                      {lb(d.weight)}
+                  {r.days.length === 0 && (
+                    <p className="text-sm text-slate-600">
+                      No upcoming deliveries.
                     </p>
-                    {d.loads.map((l, i) => (
-                      <p key={i} className="ml-3 text-xs">
-                        <strong>Load {i + 1}</strong> · {lb(l.weight)} (
-                        {Math.round((l.weight / limit) * 100)}% of limit)
-                        {l.over && (
-                          <span className="font-semibold text-brand-red">
-                            {" "}
-                            · over the limit
-                          </span>
-                        )}
-                        {" — "}
-                        {l.items
-                          .map((x) => `${x.name} (${lb(x.weight)})`)
-                          .join(", ")}
+                  )}
+                  {r.days.map((d) => (
+                    <div
+                      key={d.date}
+                      className="mb-3 break-inside-avoid text-sm"
+                    >
+                      <p className="font-semibold text-navy">
+                        {dow(d.date)} {us(d.date)} — {n(d.loads.length, "load")}
+                        , {lb(d.weight)}
                       </p>
-                    ))}
-                  </div>
-                ))}
-
+                      {d.loads.map((l, i) => (
+                        <p key={i} className="ml-3 text-xs">
+                          <strong>Load {i + 1}</strong> · {lb(l.weight)} (
+                          {Math.round((l.weight / limit) * 100)}% of limit)
+                          {l.over && (
+                            <span className="font-semibold text-brand-red">
+                              {" "}
+                              · over the limit
+                            </span>
+                          )}
+                          {" — "}
+                          {l.items
+                            .map((x) => `${x.name} (${lb(x.weight)})`)
+                            .join(", ")}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
                 <p className="mt-4 text-xs text-slate-500">
                   A structure’s weight is the sum of the Weight on each of its
                   lines in the Tracker. Based on the last Titan paste, pick
