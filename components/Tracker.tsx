@@ -878,6 +878,9 @@ export default function Tracker() {
               <option value="Schedule for delivery">
                 Schedule for delivery
               </option>
+              <option value="Schedule for customer pickup">
+                Schedule for customer pickup
+              </option>
               <option value="Structure Tracker">Structure Tracker</option>
             </select>
           </label>
