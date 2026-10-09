@@ -8,6 +8,7 @@ import { getSupabase } from "@/lib/supabase";
 import { FILTERS, type FilterKey, type Row } from "@/lib/types";
 import Link from "next/link";
 import ImportModal from "./ImportModal";
+import ManualLinesModal from "./ManualLinesModal";
 import JobBanner from "./JobBanner";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 import { analyze, QUICK_LABELS, type QuickKey } from "@/lib/metrics";
@@ -120,6 +121,7 @@ export default function Tracker() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("paste");
   const [showImport, setShowImport] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // "Needs to be scheduled": structures with no Scheduled Date on any line.
   const [needsPour, setNeedsPour] = useState(false);
@@ -624,6 +626,13 @@ export default function Tracker() {
             className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark"
           >
             Import from Titan
+          </button>
+          <button
+            onClick={() => setShowManual(true)}
+            disabled={!jobId}
+            className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy hover:bg-white"
+          >
+            Add by hand
           </button>
           <Link
             href={withJob("/procurement", job?.id)}
@@ -1133,7 +1142,7 @@ export default function Tracker() {
                   className="px-3 py-10 text-center text-slate-500"
                 >
                   Nothing here yet. Click <strong>Import from Titan</strong> and
-                  paste your spreadsheet.
+                  paste your spreadsheet, or use <strong>Add by hand</strong>.
                 </td>
               </tr>
             )}
@@ -1410,6 +1419,17 @@ export default function Tracker() {
             </div>
           </div>
         </div>
+      )}
+
+      {showManual && (
+        <ManualLinesModal
+          jobId={jobId!}
+          onClose={() => setShowManual(false)}
+          onDone={() => {
+            setShowManual(false);
+            void load();
+          }}
+        />
       )}
 
       {showImport && (
