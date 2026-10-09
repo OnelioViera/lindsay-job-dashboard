@@ -625,7 +625,18 @@ export default function Dashboard() {
             ✕
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">{body}</div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {body}
+          {m && (
+            <Link
+              href={withJob("/logistics", metricsJob.id)}
+              onClick={() => rememberJob(metricsJob.id)}
+              className="mt-4 block rounded-lg border-2 border-navy bg-navy px-3 py-2 text-center text-sm font-semibold text-white hover:bg-navy-dark"
+            >
+              Logistics report
+            </Link>
+          )}
+        </div>
         <p className="border-t border-slate-200 p-3 text-xs text-slate-500">
           Counts are structures (a structure counts once). Based on the last
           Titan paste. Click a number to open those structures in the tracker.
