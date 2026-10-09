@@ -47,11 +47,11 @@ export const todayIso = () => {
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true });
 
-/** One item per structure: weight is the sum of its lines (weight x quantity). */
+/** One item per structure: weight is the sum of the Weight shown on each of its lines. */
 export function buildItems(lines: LLine[], manual: ManualItem[]): LItem[] {
   const by = new Map<string, LItem>();
   for (const l of lines) {
-    const w = (Number(l.weight) || 0) * (Number(l.qty) || 1);
+    const w = Number(l.weight) || 0; // the Weight shown on each Tracker line
     const it = by.get(l.structure) ?? {
       key: l.structure,
       name: l.structure,

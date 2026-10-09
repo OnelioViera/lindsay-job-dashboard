@@ -580,9 +580,9 @@ export default function Logistics() {
                 ))}
 
                 <p className="mt-4 text-xs text-slate-500">
-                  A structure’s weight is the sum of its Titan lines (weight ×
-                  quantity). Based on the last Titan paste, pick dates entered
-                  in the Tracker, and items added by hand.
+                  A structure’s weight is the sum of the Weight on each of its
+                  lines in the Tracker. Based on the last Titan paste, pick
+                  dates entered in the Tracker, and items added by hand.
                 </p>
               </>
             )}
