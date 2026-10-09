@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getSupabase } from "@/lib/supabase";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 import {
@@ -400,25 +407,48 @@ export default function Logistics() {
                     </thead>
                     <tbody>
                       {r.days.map((d) => (
-                        <tr key={d.date} className="border-b border-slate-300">
-                          <td className={td}>
-                            {dow(d.date)} {us(d.date)}
-                            {d.date === today && (
-                              <span className="ml-2 text-xs font-semibold text-brand-red">
-                                today
-                              </span>
-                            )}
-                          </td>
-                          <td className={`${td} text-right tabular-nums`}>
-                            {d.items.length}
-                          </td>
-                          <td className={`${td} text-right tabular-nums`}>
-                            {lb(d.weight)}
-                          </td>
-                          <td className={`${td} text-right tabular-nums`}>
-                            {d.loads.length}
-                          </td>
-                        </tr>
+                        <Fragment key={d.date}>
+                          <tr className="border-t-2 border-slate-400 bg-slate-100 font-semibold">
+                            <td className={td}>
+                              {dow(d.date)} {us(d.date)}
+                              {d.date === today && (
+                                <span className="ml-2 text-xs font-semibold text-brand-red">
+                                  today
+                                </span>
+                              )}
+                            </td>
+                            <td className={`${td} text-right tabular-nums`}>
+                              {d.items.length}
+                            </td>
+                            <td className={`${td} text-right tabular-nums`}>
+                              {lb(d.weight)}
+                            </td>
+                            <td className={`${td} text-right tabular-nums`}>
+                              {d.loads.length}
+                            </td>
+                          </tr>
+                          {d.items.map((it) => (
+                            <tr
+                              key={it.key}
+                              className="border-b border-slate-200 text-xs"
+                            >
+                              <td className={`${td} pl-6`}>
+                                <span className="font-medium">{it.name}</span>
+                                {it.description ? ` — ${it.description}` : ""}
+                              </td>
+                              <td className={td}></td>
+                              <td className={`${td} text-right tabular-nums`}>
+                                {lb(it.weight)}
+                              </td>
+                              <td className={`${td} text-right`}>
+                                Load{" "}
+                                {d.loads.findIndex((l) =>
+                                  l.items.includes(it),
+                                ) + 1}
+                              </td>
+                            </tr>
+                          ))}
+                        </Fragment>
                       ))}
                       <tr className="font-bold">
                         <td className={td}>Total</td>
