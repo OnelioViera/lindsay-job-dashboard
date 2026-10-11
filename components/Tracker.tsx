@@ -601,9 +601,7 @@ export default function Tracker() {
     if (!dateFrom && !dateTo) return "";
     const label = DATE_FIELDS.find((d) => d.key === dateField)?.label ?? "Date";
     if (dateField !== "any") {
-      const printed = picked
-        ? visible.filter((r) => selected.has(r.id))
-        : visible;
+      const printed = visible;
       const ds = printed
         .map((r) => r[dateField] as string | null)
         .filter(
