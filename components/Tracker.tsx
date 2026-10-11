@@ -387,6 +387,32 @@ export default function Tracker() {
       return next;
     });
 
+  // Copy Structure IDs (for pasting into a Monday board): the ticked structures, else everything shown.
+  const [copied, setCopied] = useState<string | null>(null);
+  const copyIds = async (sep: "\n" | ", ") => {
+    const tick = new Set(
+      visible.filter((r) => selected.has(r.id)).map((r) => r.structure),
+    );
+    const ids = groups
+      .map((g) => g.structure)
+      .filter((id) => tick.size === 0 || tick.has(id));
+    const text = ids.join(sep);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    setCopied(
+      `Copied ${ids.length} Structure ID${ids.length === 1 ? "" : "s"}`,
+    );
+    setTimeout(() => setCopied(null), 2500);
+  };
+
   const quickSets = useMemo(() => analyze(rows).sets, [rows]);
 
   const counts = useMemo(() => {
@@ -994,6 +1020,25 @@ export default function Tracker() {
           >
             {allExpanded ? "Collapse all" : "Expand all"}
           </button>
+          <button
+            onClick={() => void copyIds("\n")}
+            disabled={groups.length === 0}
+            title="One Structure ID per line, ready to paste into a Monday board. Copies the ticked structures, or all shown if none are ticked."
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy disabled:opacity-50"
+          >
+            Copy IDs
+          </button>
+          <button
+            onClick={() => void copyIds(", ")}
+            disabled={groups.length === 0}
+            title="Structure IDs separated by commas, for one Monday cell"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy disabled:opacity-50"
+          >
+            Copy IDs (commas)
+          </button>
+          {copied && (
+            <span className="text-sm font-medium text-green-700">{copied}</span>
+          )}
           {picked ? (
             <button
               onClick={() => setPicked(null)}
