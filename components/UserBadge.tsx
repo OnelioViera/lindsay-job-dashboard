@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
+import NotificationBell from "./NotificationBell";
 
 /** Who is signed in: full name if the account has one, otherwise the part of the email before the @. */
 export default function UserBadge() {
@@ -59,6 +60,7 @@ export default function UserBadge() {
   if (!name) return null;
   return (
     <>
+      <NotificationBell />
       <button
         type="button"
         onClick={() => setOpen(true)}
