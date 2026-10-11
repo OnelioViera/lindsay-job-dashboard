@@ -12,6 +12,8 @@ import ManualLinesModal from "./ManualLinesModal";
 import JobBanner from "./JobBanner";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 import { analyze, QUICK_LABELS, type QuickKey } from "@/lib/metrics";
+import { ALERT_KIND_LABEL, alertWhen, buildAlerts } from "@/lib/alerts";
+import { useAlertSettings } from "@/lib/useAlertSettings";
 
 const QUICK_KEYS = Object.keys(QUICK_LABELS) as QuickKey[];
 
@@ -314,7 +316,29 @@ export default function Tracker() {
     ["pick", "Pick Date"],
     ["weight", "Weight"],
     ["uom", "UOM"],
+    ["alerts", "Alerts (this job)"],
   ];
+  // Alerts for this job only, same rules and snoozes as the bell.
+  const { settings: alertSettings, dismissed: alertDismissed } =
+    useAlertSettings();
+  const todayStr = toIso(new Date());
+  const jobAlerts = useMemo(() => {
+    if (!jobId) return [];
+    return buildAlerts(
+      rows.map((r) => ({
+        job_id: jobId,
+        structure: r.structure,
+        sch_date: r.sch_date,
+        ready_date: r.ready_date,
+        pick_date: r.pick_date,
+      })),
+      alertSettings,
+      todayStr,
+    ).filter((a) => {
+      const d = alertDismissed[a.key];
+      return !d || (d !== "forever" && todayStr >= d);
+    });
+  }, [rows, jobId, alertSettings, alertDismissed, todayStr]);
   const [noPrint, setNoPrint] = useState<Set<string>>(new Set(["dept", "uom"]));
   useEffect(() => {
     try {
@@ -1369,6 +1393,34 @@ export default function Tracker() {
             Notes
           </p>
           <p className="whitespace-pre-wrap">{notes.trim()}</p>
+        </div>
+      )}
+
+      {jobAlerts.length > 0 && (
+        <div
+          data-col="alerts"
+          className="mt-4 hidden break-inside-avoid text-sm text-slate-900 print:block"
+        >
+          <p className="mb-1 border-b border-slate-400 font-bold text-navy">
+            Alerts
+          </p>
+          <table className="w-full border-collapse">
+            <tbody>
+              {jobAlerts.map((a) => (
+                <tr key={a.key} className="border-b border-slate-200 align-top">
+                  <td className="py-0.5 pr-2 font-semibold whitespace-nowrap">
+                    {ALERT_KIND_LABEL[a.kind]}
+                  </td>
+                  <td className="py-0.5 pr-2 whitespace-nowrap">
+                    {alertWhen(a, todayStr)}
+                  </td>
+                  <td className="py-0.5">
+                    ({a.structures.length}) {a.structures.join(", ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

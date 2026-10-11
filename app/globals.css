@@ -21,6 +21,9 @@ body {
 }
 
 @media print {
+  html.printing-alerts #alerts-print {
+    display: block !important;
+  }
   html.printing-alerts body > *:not(#alerts-print) {
     display: none !important;
   }

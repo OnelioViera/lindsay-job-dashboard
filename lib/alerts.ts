@@ -131,3 +131,22 @@ export function buildAlerts(
       (a.date ?? "").localeCompare(b.date ?? "") || rank[a.kind] - rank[b.kind],
   );
 }
+
+export const ALERT_KIND_LABEL: Record<AlertKind, string> = {
+  delivery: "Delivery",
+  pour: "Pour",
+  overdue: "Ready, no pick date",
+};
+
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Plain-words timing for an alert, e.g. "tomorrow (Mon 10/12)". */
+export function alertWhen(a: Alert, today: string): string {
+  if (a.kind === "overdue")
+    return `waiting up to ${a.oldest} day${a.oldest === 1 ? "" : "s"}`;
+  const d = a.date!;
+  const [, m, day] = d.split("-");
+  const label = `${DOW[new Date(`${d}T00:00:00`).getDay()]} ${Number(m)}/${Number(day)}`;
+  if (d === today) return "today";
+  return daysBetween(today, d) === 1 ? `tomorrow (${label})` : label;
+}

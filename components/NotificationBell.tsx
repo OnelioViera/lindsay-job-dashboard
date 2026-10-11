@@ -219,7 +219,7 @@ export default function NotificationBell() {
 
       {typeof document !== "undefined" &&
         createPortal(
-          <div id="alerts-print" className="hidden print:block">
+          <div id="alerts-print" className="hidden">
             <h1 className="text-xl font-bold text-navy">
               Lindsay Precast · Alerts
             </h1>
