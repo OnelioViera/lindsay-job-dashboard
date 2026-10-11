@@ -596,12 +596,28 @@ export default function Tracker() {
   });
 
   const rangeInvalid = !!dateFrom && !!dateTo && dateFrom > dateTo;
-  const rangeLabel =
-    dateFrom || dateTo
-      ? `${DATE_FIELDS.find((d) => d.key === dateField)?.label ?? "Date"}: ${
-          dateFrom ? fmtDate(dateFrom) : "…"
-        } – ${dateTo ? fmtDate(dateTo) : "…"}`
-      : "";
+  // On paper show the actual dates in the printed rows, not the filter's whole month.
+  const rangeLabel = (() => {
+    if (!dateFrom && !dateTo) return "";
+    const label = DATE_FIELDS.find((d) => d.key === dateField)?.label ?? "Date";
+    if (dateField !== "any") {
+      const printed = picked
+        ? visible.filter((r) => selected.has(r.id))
+        : visible;
+      const ds = printed
+        .map((r) => r[dateField] as string | null)
+        .filter(
+          (d): d is string =>
+            !!d && (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo),
+        )
+        .sort();
+      if (ds.length) {
+        const [a, b] = [ds[0], ds[ds.length - 1]];
+        return `${label}: ${a === b ? fmtDate(a) : `${fmtDate(a)} – ${fmtDate(b)}`}`;
+      }
+    }
+    return `${label}: ${dateFrom ? fmtDate(dateFrom) : "…"} – ${dateTo ? fmtDate(dateTo) : "…"}`;
+  })();
 
   const COLS = 13;
 
