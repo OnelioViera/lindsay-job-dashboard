@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { rememberJob, withJob } from "@/lib/jobs";
@@ -169,6 +170,18 @@ export default function NotificationBell() {
           ? `tomorrow (${dow(a.date!)} ${us(a.date!)})`
           : `${dow(a.date!)} ${us(a.date!)}`;
 
+  const printAlerts = () => {
+    setOpen(false);
+    const root = document.documentElement;
+    root.classList.add("printing-alerts");
+    const done = () => {
+      root.classList.remove("printing-alerts");
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    setTimeout(() => window.print(), 100);
+  };
+
   const urgent = alerts.some((a) => a.kind === "overdue" || a.date === today);
   const field =
     "w-14 rounded border border-slate-300 px-1.5 py-1 text-sm text-slate-900";
@@ -204,16 +217,78 @@ export default function NotificationBell() {
         )}
       </button>
 
+      {typeof document !== "undefined" &&
+        createPortal(
+          <div id="alerts-print" className="hidden print:block">
+            <h1 className="text-xl font-bold text-navy">
+              Lindsay Precast · Alerts
+            </h1>
+            <p className="mb-3 text-sm">
+              Printed {dow(today)} {us(today)}/{today.slice(0, 4)} · deliveries{" "}
+              {settings.deliveryOn
+                ? `next ${settings.deliveryDays} days`
+                : "off"}
+              , pours{" "}
+              {settings.pourOn ? `next ${settings.pourDays} days` : "off"},
+              ready with no pick date{" "}
+              {settings.overdueOn ? `${settings.overdueDays}+ days` : "off"}
+            </p>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b-2 border-slate-800 text-left">
+                  <th className="py-1 pr-2">Alert</th>
+                  <th className="py-1 pr-2">When</th>
+                  <th className="py-1 pr-2">Job</th>
+                  <th className="py-1">Structures</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alerts.map((a) => {
+                  const job = jobs[a.jobId];
+                  return (
+                    <tr
+                      key={a.key}
+                      className="border-b border-slate-300 align-top"
+                    >
+                      <td className="py-1 pr-2 font-semibold">
+                        {KIND_LABEL[a.kind]}
+                      </td>
+                      <td className="py-1 pr-2">{when(a)}</td>
+                      <td className="py-1 pr-2">
+                        #{job?.job_number ?? "?"}
+                        {job?.location ? ` · ${job.location}` : ""}
+                      </td>
+                      <td className="py-1">
+                        ({a.structures.length}) {a.structures.join(", ")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>,
+          document.body,
+        )}
+
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-[26rem] max-w-[92vw] rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <p className="font-semibold text-navy">Alerts</p>
-            <button
-              onClick={() => void load()}
-              className="text-xs text-slate-500 hover:underline"
-            >
-              Refresh
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={printAlerts}
+                disabled={alerts.length === 0}
+                className="text-xs text-navy hover:underline disabled:opacity-40"
+              >
+                Print alerts
+              </button>
+              <button
+                onClick={() => void load()}
+                className="text-xs text-slate-500 hover:underline"
+              >
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto">

@@ -21,6 +21,9 @@ body {
 }
 
 @media print {
+  html.printing-alerts body > *:not(#alerts-print) {
+    display: none !important;
+  }
   html,
   body {
     background: #fff !important;
