@@ -124,6 +124,7 @@ export default function Tracker() {
   const [sort, setSort] = useState<SortKey>("paste");
   const [showImport, setShowImport] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [editRow, setEditRow] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // "Needs to be scheduled": structures with no Scheduled Date on any line.
   const [needsPour, setNeedsPour] = useState(false);
@@ -1409,7 +1410,14 @@ export default function Tracker() {
                     <td data-col="uom" className="px-2 py-2 print:px-1.5">
                       {r.uom}
                     </td>
-                    <td className="px-2 py-2 text-right print:hidden">
+                    <td className="px-2 py-2 text-right whitespace-nowrap print:hidden">
+                      <button
+                        onClick={() => setEditRow(r)}
+                        className="rounded px-2 py-1 text-xs font-semibold text-navy hover:bg-slate-100"
+                        title={`Edit ${r.structure}`}
+                      >
+                        Edit
+                      </button>
                       <button
                         onClick={() =>
                           isHeader
@@ -1538,6 +1546,19 @@ export default function Tracker() {
           onClose={() => setShowManual(false)}
           onDone={() => {
             setShowManual(false);
+            void load();
+          }}
+        />
+      )}
+
+      {editRow && (
+        <ManualLinesModal
+          key={editRow.id}
+          jobId={jobId!}
+          edit={editRow}
+          onClose={() => setEditRow(null)}
+          onDone={() => {
+            setEditRow(null);
             void load();
           }}
         />

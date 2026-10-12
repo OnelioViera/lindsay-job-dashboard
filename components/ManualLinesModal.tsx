@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getSupabase } from "@/lib/supabase";
+import type { Row } from "@/lib/types";
 
 // Same fields as a Titan line, for jobs that are not (or not yet) in Titan.
 type Draft = {
@@ -49,16 +50,34 @@ const isBlank = (d: Draft) =>
   !d.description.trim() &&
   !d.weight.trim();
 
+const fromRow = (r: Row): Draft => ({
+  structure: r.structure,
+  priority: r.priority === null ? "" : String(r.priority),
+  product: r.product ?? "",
+  description: r.description ?? "",
+  plant: r.plant_id ?? "",
+  dep: r.production_dep ?? "",
+  sch: r.sch_date ?? "",
+  ready: r.ready_date ?? "",
+  pro: r.pro_date ?? "",
+  pick: r.pick_date ?? "",
+  weight: r.weight === null ? "" : String(r.weight),
+  uom: r.uom ?? "",
+  qty: r.qty === null ? "" : String(r.qty),
+});
+
 export default function ManualLinesModal({
   jobId,
+  edit,
   onClose,
   onDone,
 }: {
   jobId: string;
+  edit?: Row; // when set, edit this one line instead of adding new ones
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [rows, setRows] = useState<Draft[]>([blank()]);
+  const [rows, setRows] = useState<Draft[]>([edit ? fromRow(edit) : blank()]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -80,6 +99,47 @@ export default function ManualLinesModal({
     setBusy(true);
     setErr(null);
     const supabase = getSupabase();
+    if (edit) {
+      const d = used[0];
+      const { error } = await supabase
+        .from("titan_lines")
+        .update({
+          structure: d.structure.trim(),
+          priority: num(d.priority),
+          product: d.product.trim() || null,
+          description: d.description.trim() || null,
+          plant_id: d.plant.trim() || null,
+          production_dep: d.dep.trim() || null,
+          sch_date: d.sch || null,
+          ready_date: d.ready || null,
+          pro_date: d.pro || null,
+          pick_date: d.pick || null,
+          weight: num(d.weight),
+          uom: d.uom.trim() || null,
+          qty: num(d.qty),
+        })
+        .eq("id", edit.id);
+      if (!error && d.structure.trim() !== edit.structure) {
+        // Renamed: keep the structure's other lines together under the new name.
+        const { error: e2 } = await supabase
+          .from("titan_lines")
+          .update({ structure: d.structure.trim() })
+          .eq("job_id", jobId)
+          .eq("structure", edit.structure);
+        if (e2) {
+          setErr(e2.message);
+          setBusy(false);
+          return;
+        }
+      }
+      setBusy(false);
+      if (error) {
+        setErr(error.message);
+        return;
+      }
+      onDone();
+      return;
+    }
     const { data: top, error: te } = await supabase
       .from("titan_lines")
       .select("sort_order")
@@ -127,12 +187,13 @@ export default function ManualLinesModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
       <div className="flex max-h-[90vh] w-full max-w-[96rem] flex-col rounded-xl bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-navy">Add lines by hand</h2>
+        <h2 className="text-lg font-semibold text-navy">
+          {edit ? `Edit line · ${edit.structure}` : "Add lines by hand"}
+        </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Same columns as the Titan sheet. A structure with several pieces gets
-          one line per piece (use “Add line to same structure”). If the job is
-          pasted from Titan later, matching lines are updated instead of
-          duplicated, and lines Titan doesn’t have are kept.
+          {edit
+            ? "Change anything on this line. Renaming the Structure renames all of its lines. Note: pasting the job from Titan again can overwrite edits to lines that Titan also has."
+            : "Same columns as the Titan sheet. A structure with several pieces gets one line per piece (use “+ same structure”). If the job is pasted from Titan later, matching lines are updated instead of duplicated, and lines Titan doesn’t have are kept."}
         </p>
 
         <div className="mt-3 flex-1 overflow-auto">
@@ -235,7 +296,7 @@ export default function ManualLinesModal({
                       className={cell}
                     />
                   </td>
-                  <td className="whitespace-nowrap">
+                  <td className="whitespace-nowrap" hidden={!!edit}>
                     <button
                       onClick={() =>
                         setRows((r) => [
@@ -273,14 +334,18 @@ export default function ManualLinesModal({
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setRows((r) => [...r, blank()])}
-            className="rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-slate-50"
-          >
-            + Add line
-          </button>
+          {!edit && (
+            <button
+              onClick={() => setRows((r) => [...r, blank()])}
+              className="rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-slate-50"
+            >
+              + Add line
+            </button>
+          )}
           <span className="flex-1 text-sm text-slate-500">
-            {used.length} line{used.length === 1 ? "" : "s"} ready to add
+            {edit
+              ? ""
+              : `${used.length} line${used.length === 1 ? "" : "s"} ready to add`}
           </span>
           <button
             onClick={onClose}
@@ -294,7 +359,13 @@ export default function ManualLinesModal({
             disabled={busy || used.length === 0 || !!problem}
             className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-dark disabled:opacity-40"
           >
-            {busy ? "Adding…" : `Add ${used.length || ""} to the Tracker`}
+            {edit
+              ? busy
+                ? "Saving…"
+                : "Save changes"
+              : busy
+                ? "Adding…"
+                : `Add ${used.length || ""} to the Tracker`}
           </button>
         </div>
       </div>
