@@ -23,6 +23,7 @@ import {
   type LLine,
   type ManualItem,
 } from "@/lib/logistics";
+import { hasExtPrice } from "@/lib/priceColumn";
 import BackButton from "./BackButton";
 import UserBadge from "./UserBadge";
 
@@ -97,10 +98,14 @@ export default function Logistics() {
     if (!jobId) return;
     const supabase = getSupabase();
     const all: LLine[] = [];
+    const withPrice = await hasExtPrice();
     for (let from = 0; ; from += 1000) {
       const { data, error: e } = await supabase
         .from("titan_lines")
-        .select("structure, description, ready_date, pick_date, weight, qty")
+        .select(
+          "structure, description, ready_date, pick_date, weight, qty" +
+            (withPrice ? ", ext_price" : ""),
+        )
         .eq("job_id", jobId)
         .order("sort_order")
         .range(from, from + 999);
@@ -108,7 +113,7 @@ export default function Logistics() {
         setError(e.message);
         break;
       }
-      all.push(...((data ?? []) as LLine[]));
+      all.push(...((data ?? []) as unknown as LLine[]));
       if (!data || data.length < 1000) break;
     }
     setLines(all);
@@ -393,9 +398,10 @@ export default function Logistics() {
                   ` (${items.filter((i) => !i.manual && i.cost > 0).length} of ${items.filter((i) => !i.manual).length} entered · total ${money(sumC(items))})`}
               </summary>
               <p className="mt-2 mb-2 text-xs text-slate-600">
-                Type the cost of each structure. Totals appear in the report per
-                delivery day, per truckload and for the whole job. Costs are
-                saved with this job.
+                Costs come from Titan’s ExtPrice (added up across each
+                structure’s lines). Type a cost to override one. Totals appear
+                in the report per delivery day, per truckload and for the whole
+                job. Costs are saved with this job.
               </p>
               <div className="max-h-80 overflow-auto rounded-md border border-slate-200">
                 <table className="w-full border-collapse text-sm">
@@ -427,7 +433,9 @@ export default function Logistics() {
                                 }))
                               }
                               inputMode="decimal"
-                              placeholder="0.00"
+                              placeholder={
+                                i.titanCost ? i.titanCost.toFixed(2) : "0.00"
+                              }
                               className={`${field} w-32 py-1`}
                             />
                           </td>

@@ -15,6 +15,7 @@ export type ParsedRow = {
   uom: string;
   product: string;
   qty: number | null; // QO (quantity ordered)
+  extPrice: number | null; // ExtPrice ($ for the line)
 };
 
 export type ParseResult = {
@@ -131,6 +132,7 @@ export function parseTitan(text: string): ParseResult {
     uom: col("UOM"),
     product: col("Product"),
     qty: col("QO", "Qty"),
+    price: col("ExtPrice", "Ext Price", "Extended Price"),
   };
 
   if (c.structure < 0) {
@@ -158,6 +160,7 @@ export function parseTitan(text: string): ParseResult {
     uom: "UOM",
     product: "Product",
     qty: "QO",
+    price: "ExtPrice",
   };
   const missing = (Object.keys(c) as (keyof typeof c)[])
     .filter((k) => c[k] < 0)
@@ -176,6 +179,7 @@ export function parseTitan(text: string): ParseResult {
     uom: "uom",
     product: "product",
     qty: "qty",
+    price: "extPrice",
   };
   const absent = (Object.keys(c) as (keyof typeof c)[])
     .filter((k) => c[k] < 0)
@@ -211,6 +215,7 @@ export function parseTitan(text: string): ParseResult {
       uom: get(r, c.uom),
       product: get(r, c.product),
       qty: num(get(r, c.qty)),
+      extPrice: num(get(r, c.price)),
     });
   }
 

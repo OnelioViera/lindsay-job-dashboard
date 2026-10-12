@@ -21,6 +21,7 @@ export type DbLine = {
   uom: string | null;
   product: string | null;
   qty: number | null;
+  ext_price?: number | null;
 };
 
 export type Change = { label: string; from: string; to: string };
@@ -77,6 +78,7 @@ const stored = (l: DbLine): Partial<Record<keyof ParsedRow, unknown>> => ({
   uom: l.uom ?? "",
   product: l.product ?? "",
   qty: l.qty,
+  extPrice: l.ext_price ?? null,
 });
 
 export function planMerge(
@@ -191,6 +193,7 @@ export function planMerge(
     const quiet =
       (l.pro_date ?? null) !== (r.proDate ?? null) ||
       !sameNum(l.qty, r.qty) ||
+      (l.ext_price !== undefined && !sameNum(l.ext_price, r.extPrice)) ||
       norm(l.product) !== norm(r.product) ||
       l.sort_order !== index;
 

@@ -10,6 +10,7 @@ export type LLine = {
   pick_date: string | null;
   weight: number | null;
   qty: number | null;
+  ext_price?: number | null; // Titan ExtPrice for the line
 };
 
 export type ManualItem = {
@@ -38,7 +39,8 @@ export type LItem = {
   name: string;
   description: string;
   weight: number; // total lb
-  cost: number; // total $
+  cost: number; // total $ (typed cost, else the Titan prices added up)
+  titanCost: number; // total $ from Titan ExtPrice
   ready: string | null;
   pick: string | null;
   manual: boolean;
@@ -75,12 +77,14 @@ export function buildItems(
       name: l.structure,
       description: l.description ?? "",
       weight: 0,
-      cost: parseCost(costs[l.structure]),
+      cost: 0,
+      titanCost: 0,
       ready: null,
       pick: null,
       manual: false,
     };
     it.weight += w;
+    it.titanCost += Number(l.ext_price) || 0;
     // Ready only when every line is ready: use the latest Ready Date.
     if (l.ready_date && (!it.ready || l.ready_date > it.ready))
       it.ready = l.ready_date;
@@ -89,6 +93,10 @@ export function buildItems(
     by.set(l.structure, it);
   }
   const items = [...by.values()];
+  for (const it of items) {
+    const typed = (costs[it.key] ?? "").trim();
+    it.cost = typed !== "" ? parseCost(typed) : it.titanCost;
+  }
   for (const m of manual) {
     items.push({
       key: `manual-${m.id}`,
@@ -96,6 +104,7 @@ export function buildItems(
       description: m.description,
       weight: (Number(m.weight) || 0) * (Number(m.qty) || 1),
       cost: (Number(m.cost) || 0) * (Number(m.qty) || 1),
+      titanCost: 0,
       ready: null,
       pick: m.pick || null,
       manual: true,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import type { Row } from "@/lib/types";
+import { hasExtPrice } from "@/lib/priceColumn";
 
 // Same fields as a Titan line, for jobs that are not (or not yet) in Titan.
 type Draft = {
@@ -19,6 +20,7 @@ type Draft = {
   weight: string;
   uom: string;
   qty: string;
+  price: string;
 };
 
 const blank = (from?: Draft): Draft => ({
@@ -35,10 +37,11 @@ const blank = (from?: Draft): Draft => ({
   weight: "",
   uom: "EA",
   qty: "1",
+  price: "",
 });
 
 const num = (s: string) => {
-  const t = s.replace(/,/g, "").trim();
+  const t = s.replace(/[$,]/g, "").trim();
   if (t === "") return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : NaN;
@@ -64,6 +67,10 @@ const fromRow = (r: Row): Draft => ({
   weight: r.weight === null ? "" : String(r.weight),
   uom: r.uom ?? "",
   qty: r.qty === null ? "" : String(r.qty),
+  price:
+    r.ext_price === null || r.ext_price === undefined
+      ? ""
+      : String(r.ext_price),
 });
 
 export default function ManualLinesModal({
@@ -88,7 +95,7 @@ export default function ManualLinesModal({
   const problem = (() => {
     for (const d of used) {
       if (!d.structure.trim()) return "Every line needs a Structure.";
-      for (const k of ["priority", "weight", "qty"] as const)
+      for (const k of ["priority", "weight", "qty", "price"] as const)
         if (Number.isNaN(num(d[k]))) return `“${d[k]}” is not a number.`;
     }
     return null;
@@ -99,6 +106,7 @@ export default function ManualLinesModal({
     setBusy(true);
     setErr(null);
     const supabase = getSupabase();
+    const withPrice = await hasExtPrice();
     if (edit) {
       const d = used[0];
       const { error } = await supabase
@@ -117,6 +125,7 @@ export default function ManualLinesModal({
           weight: num(d.weight),
           uom: d.uom.trim() || null,
           qty: num(d.qty),
+          ...(withPrice ? { ext_price: num(d.price) } : {}),
         })
         .eq("id", edit.id);
       if (!error && d.structure.trim() !== edit.structure) {
@@ -170,6 +179,7 @@ export default function ManualLinesModal({
       weight: num(d.weight),
       uom: d.uom.trim() || null,
       qty: num(d.qty),
+      ...(withPrice ? { ext_price: num(d.price) } : {}),
     }));
     const { error } = await supabase.from("titan_lines").insert(recs);
     setBusy(false);
@@ -213,6 +223,7 @@ export default function ManualLinesModal({
                 <th className={th}>Wt. (lb)</th>
                 <th className={th}>UOM</th>
                 <th className={th}>QO</th>
+                <th className={th}>Ext. Price ($)</th>
                 <th />
               </tr>
             </thead>
@@ -292,6 +303,14 @@ export default function ManualLinesModal({
                     <input
                       value={d.qty}
                       onChange={(e) => set(i, "qty", e.target.value)}
+                      inputMode="decimal"
+                      className={cell}
+                    />
+                  </td>
+                  <td className="w-28 pr-1">
+                    <input
+                      value={d.price}
+                      onChange={(e) => set(i, "price", e.target.value)}
                       inputMode="decimal"
                       className={cell}
                     />

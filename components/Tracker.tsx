@@ -14,6 +14,7 @@ import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 import { analyze, QUICK_LABELS, type QuickKey } from "@/lib/metrics";
 import { ALERT_KIND_LABEL, alertWhen, buildAlerts } from "@/lib/alerts";
 import { useAlertSettings } from "@/lib/useAlertSettings";
+import { fmtMoney, hasExtPrice } from "@/lib/priceColumn";
 
 const QUICK_KEYS = Object.keys(QUICK_LABELS) as QuickKey[];
 
@@ -285,12 +286,14 @@ export default function Tracker() {
     setLoading(true);
     const supabase = getSupabase();
     const all: Row[] = [];
+    const withPrice = await hasExtPrice();
     // Supabase returns at most 1000 rows per request, so page through.
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from("titan_lines")
         .select(
-          "id, sort_order, priority, structure, description, plant_id, production_dep, sch_date, ready_date, pro_date, pick_date, weight, uom, product, qty",
+          "id, sort_order, priority, structure, description, plant_id, production_dep, sch_date, ready_date, pro_date, pick_date, weight, uom, product, qty" +
+            (withPrice ? ", ext_price" : ""),
         )
         .eq("job_id", jobId)
         .order("sort_order", { ascending: true })
@@ -300,7 +303,7 @@ export default function Tracker() {
         setLoading(false);
         return;
       }
-      all.push(...((data ?? []) as Row[]));
+      all.push(...((data ?? []) as unknown as Row[]));
       if (!data || data.length < PAGE) break;
     }
     setError(null);
@@ -334,6 +337,7 @@ export default function Tracker() {
     ["pick", "Pick Date"],
     ["weight", "Weight"],
     ["uom", "UOM"],
+    ["price", "Price (Titan ExtPrice)"],
     ["alerts", "Alerts (this job)"],
   ];
   // Alerts for this job only, same rules and snoozes as the bell.
@@ -357,11 +361,21 @@ export default function Tracker() {
       return !d || (d !== "forever" && todayStr >= d);
     });
   }, [rows, jobId, alertSettings, alertDismissed, todayStr]);
-  const [noPrint, setNoPrint] = useState<Set<string>>(new Set(["dept", "uom"]));
+  const [noPrint, setNoPrint] = useState<Set<string>>(
+    new Set(["dept", "uom", "price"]),
+  );
   useEffect(() => {
     try {
       const v = localStorage.getItem("print-cols-hidden");
-      if (v) setNoPrint(new Set(JSON.parse(v) as string[]));
+      if (v) {
+        const set = new Set(JSON.parse(v) as string[]);
+        // Price is new: keep it off the printout (customer copies) until you tick it.
+        if (!localStorage.getItem("print-price-seen")) {
+          set.add("price");
+          localStorage.setItem("print-price-seen", "1");
+        }
+        setNoPrint(set);
+      }
     } catch {}
   }, []);
   // Title on the printout / saved PDF ("" = automatic).
@@ -661,7 +675,7 @@ export default function Tracker() {
     return `${label}: ${dateFrom ? fmtDate(dateFrom) : "…"} – ${dateTo ? fmtDate(dateTo) : "…"}`;
   })();
 
-  const COLS = 13;
+  const COLS = 14;
 
   const headingText =
     printTitle || (picked ? "Schedule to pour" : "Structure Tracker");
@@ -1220,6 +1234,12 @@ export default function Tracker() {
               <th data-col="uom" className="px-2 py-2">
                 UOM
               </th>
+              <th
+                data-col="price"
+                className="px-2 py-2 text-right print:px-1.5"
+              >
+                Price
+              </th>
               <th className="px-2 py-2 print:hidden">
                 <span className="sr-only">Delete</span>
               </th>
@@ -1266,6 +1286,10 @@ export default function Tracker() {
                   ? [g.header, ...g.lines]
                   : [g.header];
               const total = g.lines.reduce((n, l) => n + (l.weight ?? 0), 0);
+              const priceTotal = g.lines.reduce(
+                (n, l) => n + (l.ext_price ?? 0),
+                0,
+              );
               return shown.map((r, idx) => {
                 const isHeader = idx === 0;
                 return (
@@ -1426,6 +1450,21 @@ export default function Tracker() {
                     </td>
                     <td data-col="uom" className="px-2 py-2 print:px-1.5">
                       {r.uom}
+                    </td>
+                    <td
+                      data-col="price"
+                      className="px-2 py-2 text-right tabular-nums print:px-1.5"
+                    >
+                      {isHeader && g.lines.length > 1 ? (
+                        <span
+                          className="font-semibold"
+                          title={`Total of ${g.lines.length} lines`}
+                        >
+                          {fmtMoney(priceTotal)}
+                        </span>
+                      ) : (
+                        fmtMoney(r.ext_price)
+                      )}
                     </td>
                     <td className="px-2 py-2 text-right whitespace-nowrap print:hidden">
                       <button

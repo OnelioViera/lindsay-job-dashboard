@@ -14,6 +14,7 @@ export type Row = {
   uom: string | null;
   product: string | null;
   qty: number | null;
+  ext_price?: number | null;
 };
 
 export type FilterKey = "scheduled_pour" | "scheduled_delivery";
