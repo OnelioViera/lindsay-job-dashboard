@@ -137,6 +137,8 @@ export default function Tracker() {
   const scrolled = useRef(false);
   // Structures picked for the scheduler; when set, only these are shown.
   const [picked, setPicked] = useState<Set<string> | null>(null);
+  // Individual lines (components) ticked and shown on their own; when set, only these lines show.
+  const [pickedLines, setPickedLines] = useState<Set<string> | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{
     ids: string[];
     all: boolean;
@@ -169,6 +171,7 @@ export default function Tracker() {
         setNeedsPour(!!u.needsPour);
         setQuick(u.quick ?? null);
         setPicked(u.picked ? new Set(u.picked) : null);
+        setPickedLines(u.pickedLines ? new Set(u.pickedLines) : null);
         setDateField(u.dateField ?? "any");
         setDateFrom(u.dateFrom ?? "");
         setDateTo(u.dateTo ?? "");
@@ -189,6 +192,7 @@ export default function Tracker() {
         setDateField("any");
         setDateFrom("");
         setDateTo("");
+        setPickedLines(null);
         setPicked(new Set(f.structures as string[]));
       }
     } catch {}
@@ -214,6 +218,7 @@ export default function Tracker() {
           needsPour,
           quick,
           picked: picked ? [...picked] : null,
+          pickedLines: pickedLines ? [...pickedLines] : null,
           dateField,
           dateFrom,
           dateTo,
@@ -230,6 +235,7 @@ export default function Tracker() {
     needsPour,
     quick,
     picked,
+    pickedLines,
     dateField,
     dateFrom,
     dateTo,
@@ -480,6 +486,7 @@ export default function Tracker() {
       rows
         .filter((r) => (needsPour ? neverScheduled.has(r.structure) : true))
         .filter((r) => (picked ? picked.has(r.structure) : true))
+        .filter((r) => (pickedLines ? pickedLines.has(r.id) : true))
         .filter((r) => (quick ? quickSets[quick].has(r.structure) : true))
         .filter((r) => (inRange ? inRange.has(r.structure) : true))
         .filter((r) =>
@@ -511,6 +518,7 @@ export default function Tracker() {
     needsPour,
     neverScheduled,
     picked,
+    pickedLines,
     quick,
     quickSets,
   ]);
@@ -800,6 +808,7 @@ export default function Tracker() {
             {rangeLabel ? ` · ${rangeLabel}` : ""}
             {needsPour ? " · Structures never scheduled to pour" : ""}
             {picked ? " · Selected structures only" : ""}
+            {pickedLines ? " · Selected components only" : ""}
             {quick ? ` · ${QUICK_LABELS[quick]}` : ""}
           </p>
         </div>
@@ -1070,6 +1079,25 @@ export default function Tracker() {
           </button>
           {copied && (
             <span className="text-sm font-medium text-green-700">{copied}</span>
+          )}
+          {pickedLines ? (
+            <button
+              onClick={() => setPickedLines(null)}
+              className="rounded-md bg-navy px-3 py-1.5 font-semibold text-white hover:bg-navy-dark"
+            >
+              Show full list again ({pickedLines.size} component
+              {pickedLines.size === 1 ? "" : "s"} shown)
+            </button>
+          ) : (
+            selectedIds.length > 0 && (
+              <button
+                onClick={() => setPickedLines(new Set(selectedIds))}
+                title="Show only the ticked lines (components), not their whole structures"
+                className="rounded-md border border-navy bg-white px-3 py-1.5 font-semibold text-navy hover:bg-slate-50"
+              >
+                Show only selected lines ({selectedIds.length})
+              </button>
+            )
           )}
           {picked ? (
             <button
