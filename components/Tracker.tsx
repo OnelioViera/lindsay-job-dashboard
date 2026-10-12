@@ -1033,6 +1033,14 @@ export default function Tracker() {
               <option value="Structure Tracker">Structure Tracker</option>
             </select>
           </label>
+          <label className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={!noPrint.has("price")}
+              onChange={() => togglePrintCol("price")}
+            />
+            Show price on printout
+          </label>
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy">
               Print columns ({PRINT_COLS.length - noPrint.size}/
@@ -1566,50 +1574,22 @@ export default function Tracker() {
               });
             })}
           </tbody>
-          {groups.length > 0 && (
-            <tfoot className="print:table-row-group">
-              <tr className="border-t-2 border-navy bg-slate-100 font-bold text-navy">
-                <td className="px-2 py-2 print:hidden"></td>
-                <td data-col="num" className="px-2 py-2 print:px-1.5"></td>
-                <td data-col="priority" className="px-2 py-2 print:px-1.5"></td>
-                <td
-                  data-col="structure"
-                  className="px-2 py-2 whitespace-nowrap print:px-1.5"
-                >
-                  Total
-                </td>
-                <td data-col="product" className="px-2 py-2 print:px-1.5"></td>
-                <td
-                  data-col="description"
-                  className="px-2 py-2 font-semibold print:px-1.5"
-                >
-                  {groups.length} structure{groups.length === 1 ? "" : "s"}
-                </td>
-                <td data-col="plant" className="px-2 py-2 print:px-1.5"></td>
-                <td data-col="dept" className="px-2 py-2"></td>
-                <td data-col="sch" className="px-2 py-2 print:px-1.5"></td>
-                <td data-col="ready" className="px-2 py-2 print:px-1.5"></td>
-                <td data-col="pick" className="px-2 py-2 print:px-1.5"></td>
-                <td
-                  data-col="weight"
-                  className="px-2 py-2 text-right tabular-nums print:px-1.5"
-                >
-                  {fmtWeight(visible.reduce((n, r) => n + (r.weight ?? 0), 0))}
-                </td>
-                <td data-col="uom" className="px-2 py-2 print:px-1.5"></td>
-                <td
-                  data-col="price"
-                  className="px-2 py-2 text-right tabular-nums print:px-1.5"
-                >
-                  {fmtMoney(
-                    visible.reduce((n, r) => n + (r.ext_price ?? 0), 0),
-                  )}
-                </td>
-                <td className="px-2 py-2 print:hidden"></td>
-              </tr>
-            </tfoot>
-          )}
         </table>
+        {groups.length > 0 && (
+          <div className="sticky bottom-0 mt-2 flex flex-wrap items-center justify-end gap-x-8 gap-y-1 rounded-md border-2 border-navy bg-slate-100 px-4 py-2 text-sm font-bold text-navy print:mt-1 print:break-inside-avoid print:border-0 print:border-t-2 print:rounded-none">
+            <span>
+              Total: {groups.length} structure{groups.length === 1 ? "" : "s"}
+            </span>
+            <span data-col="weight">
+              Weight:{" "}
+              {fmtWeight(visible.reduce((n, r) => n + (r.weight ?? 0), 0))}
+            </span>
+            <span data-col="price">
+              Price:{" "}
+              {fmtMoney(visible.reduce((n, r) => n + (r.ext_price ?? 0), 0))}
+            </span>
+          </div>
+        )}
       </section>
 
       {notes.trim() && (
