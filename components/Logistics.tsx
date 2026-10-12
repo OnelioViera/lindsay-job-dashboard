@@ -85,6 +85,7 @@ export default function Logistics() {
     ["yard", "Yard and risk list"],
     ["load", "Truckload grouping"],
     ["cost", "Costs"],
+    ["trucks", "Truckload numbers"],
   ];
   const ready = useRef(false); // settings loaded; changes after this get saved
 
@@ -492,8 +493,10 @@ export default function Logistics() {
                   month: "long",
                   day: "numeric",
                 })}
-                <br />
-                Truckload limit {lb(limit)}
+                <span className={skip("trucks")}>
+                  <br />
+                  Truckload limit {lb(limit)}
+                </span>
               </p>
             </div>
 
@@ -580,7 +583,9 @@ export default function Logistics() {
                           <th className={`${th} text-right ${skip("cost")}`}>
                             Cost
                           </th>
-                          <th className={`${th} text-right`}>Truckloads</th>
+                          <th className={`${th} text-right ${skip("trucks")}`}>
+                            Truckloads
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -606,7 +611,9 @@ export default function Logistics() {
                               >
                                 {money(d.cost)}
                               </td>
-                              <td className={`${td} text-right tabular-nums`}>
+                              <td
+                                className={`${td} text-right tabular-nums ${skip("trucks")}`}
+                              >
                                 {d.loads.length}
                               </td>
                             </tr>
@@ -628,7 +635,9 @@ export default function Logistics() {
                                 >
                                   {it.cost ? money(it.cost) : ""}
                                 </td>
-                                <td className={`${td} text-right`}>
+                                <td
+                                  className={`${td} text-right ${skip("trucks")}`}
+                                >
                                   Load{" "}
                                   {d.loads.findIndex((l) =>
                                     l.items.includes(it),
@@ -651,7 +660,9 @@ export default function Logistics() {
                           >
                             {money(sumC(r.scheduled))}
                           </td>
-                          <td className={`${td} text-right tabular-nums`}>
+                          <td
+                            className={`${td} text-right tabular-nums ${skip("trucks")}`}
+                          >
                             {totalLoads}
                           </td>
                         </tr>
