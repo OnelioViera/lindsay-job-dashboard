@@ -174,6 +174,23 @@ export default function Tracker() {
         setExpanded(new Set(u.expanded ?? []));
       }
     } catch {}
+    // A notification-bell alert: show exactly that alert's structures, nothing else.
+    try {
+      const f = JSON.parse(sessionStorage.getItem("tracker-focus") ?? "null");
+      if (f && f.jobId === jobId && Array.isArray(f.structures)) {
+        sessionStorage.removeItem("tracker-focus");
+        setActive(new Set());
+        setSearch("");
+        setSort("paste");
+        setSelected(new Set());
+        setNeedsPour(false);
+        setQuick(null);
+        setDateField("any");
+        setDateFrom("");
+        setDateTo("");
+        setPicked(new Set(f.structures as string[]));
+      }
+    } catch {}
     // A Dashboard metrics chip opens this page with ?show=…; apply it once, then tidy the URL.
     const url = new URL(window.location.href);
     const s = url.searchParams.get("show");

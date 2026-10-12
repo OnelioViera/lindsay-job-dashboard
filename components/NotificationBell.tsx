@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
@@ -35,7 +34,6 @@ const KIND_LABEL = {
   pour: "Pour",
   overdue: "Ready, no pick date",
 } as const;
-const SHOW = { delivery: "picked", pour: "scheduled", overdue: "readyOverdue" };
 
 /** The bell in the top bar: upcoming deliveries and pours, and structures waiting in the yard. */
 export default function NotificationBell() {
@@ -306,11 +304,24 @@ export default function NotificationBell() {
                   className="border-b border-slate-100 px-4 py-3 text-sm"
                 >
                   <div className="flex items-start gap-2">
-                    <Link
-                      href={`${withJob("/structures", a.jobId)}&show=${SHOW[a.kind]}`}
-                      onClick={() => {
+                    <a
+                      href={withJob("/structures", a.jobId)}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+                        e.preventDefault();
+                        // Open that job's Tracker showing just this alert's structures.
+                        try {
+                          sessionStorage.setItem(
+                            "tracker-focus",
+                            JSON.stringify({
+                              jobId: a.jobId,
+                              structures: a.structures,
+                            }),
+                          );
+                        } catch {}
                         rememberJob(a.jobId);
                         setOpen(false);
+                        window.location.assign(withJob("/structures", a.jobId));
                       }}
                       className="flex-1 hover:underline"
                     >
@@ -331,7 +342,7 @@ export default function NotificationBell() {
                           ? ` +${a.structures.length - 6} more`
                           : ""}
                       </span>
-                    </Link>
+                    </a>
                     <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-slate-500">
                       <button
                         onClick={() => hide(a, false)}
