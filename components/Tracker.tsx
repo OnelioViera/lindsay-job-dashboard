@@ -1286,6 +1286,18 @@ export default function Tracker() {
                   ? [g.header, ...g.lines]
                   : [g.header];
               const total = g.lines.reduce((n, l) => n + (l.weight ?? 0), 0);
+              // The structure row shows its pour date if any piece is scheduled (earliest), and
+              // is ready only when every piece with a Ready Date is (latest), as in the metrics.
+              const dates = (k: "sch_date" | "ready_date") =>
+                g.lines.map((l) => l[k]).filter((d): d is string => !!d);
+              const schs = dates("sch_date");
+              const readys = dates("ready_date");
+              const structSch = schs.length
+                ? schs.reduce((a, b) => (a < b ? a : b))
+                : null;
+              const structReady = readys.length
+                ? readys.reduce((a, b) => (a > b ? a : b))
+                : null;
               const priceTotal = g.lines.reduce(
                 (n, l) => n + (l.ext_price ?? 0),
                 0,
@@ -1405,13 +1417,13 @@ export default function Tracker() {
                       data-col="sch"
                       className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
                     >
-                      {fmtDate(r.sch_date)}
+                      {fmtDate(isHeader ? structSch : r.sch_date)}
                     </td>
                     <td
                       data-col="ready"
                       className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
                     >
-                      {fmtDate(r.ready_date)}
+                      {fmtDate(isHeader ? structReady : r.ready_date)}
                     </td>
                     <td
                       data-col="pick"
