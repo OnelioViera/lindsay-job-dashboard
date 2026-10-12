@@ -1519,6 +1519,49 @@ export default function Tracker() {
               });
             })}
           </tbody>
+          {groups.length > 0 && (
+            <tfoot className="print:table-row-group">
+              <tr className="border-t-2 border-navy bg-slate-100 font-bold text-navy">
+                <td className="px-2 py-2 print:hidden"></td>
+                <td data-col="num" className="px-2 py-2 print:px-1.5"></td>
+                <td data-col="priority" className="px-2 py-2 print:px-1.5"></td>
+                <td
+                  data-col="structure"
+                  className="px-2 py-2 whitespace-nowrap print:px-1.5"
+                >
+                  Total
+                </td>
+                <td data-col="product" className="px-2 py-2 print:px-1.5"></td>
+                <td
+                  data-col="description"
+                  className="px-2 py-2 font-semibold print:px-1.5"
+                >
+                  {groups.length} structure{groups.length === 1 ? "" : "s"}
+                </td>
+                <td data-col="plant" className="px-2 py-2 print:px-1.5"></td>
+                <td data-col="dept" className="px-2 py-2"></td>
+                <td data-col="sch" className="px-2 py-2 print:px-1.5"></td>
+                <td data-col="ready" className="px-2 py-2 print:px-1.5"></td>
+                <td data-col="pick" className="px-2 py-2 print:px-1.5"></td>
+                <td
+                  data-col="weight"
+                  className="px-2 py-2 text-right tabular-nums print:px-1.5"
+                >
+                  {fmtWeight(visible.reduce((n, r) => n + (r.weight ?? 0), 0))}
+                </td>
+                <td data-col="uom" className="px-2 py-2 print:px-1.5"></td>
+                <td
+                  data-col="price"
+                  className="px-2 py-2 text-right tabular-nums print:px-1.5"
+                >
+                  {fmtMoney(
+                    visible.reduce((n, r) => n + (r.ext_price ?? 0), 0),
+                  )}
+                </td>
+                <td className="px-2 py-2 print:hidden"></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </section>
 
