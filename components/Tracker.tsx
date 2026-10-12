@@ -1326,6 +1326,17 @@ export default function Tracker() {
               const structReady = readys.length
                 ? readys.reduce((a, b) => (a > b ? a : b))
                 : null;
+              const picks = g.lines
+                .map((l) => l.pick_date)
+                .filter((d): d is string => !!d);
+              const structPick = picks.length
+                ? picks.reduce((a, b) => (a < b ? a : b))
+                : null;
+              // Pieces of one structure normally share a pick date; flag when they don't.
+              const pickVaries =
+                g.lines.length > 1 &&
+                (new Set(picks).size > 1 ||
+                  (picks.length > 0 && picks.length < g.lines.length));
               const priceTotal = g.lines.reduce(
                 (n, l) => n + (l.ext_price ?? 0),
                 0,
@@ -1459,7 +1470,7 @@ export default function Tracker() {
                     >
                       <input
                         type="date"
-                        value={r.pick_date ?? ""}
+                        value={(isHeader ? structPick : r.pick_date) ?? ""}
                         onChange={(e) =>
                           void setPick(
                             isHeader ? g.lines.map((l) => l.id) : [r.id],
@@ -1469,8 +1480,16 @@ export default function Tracker() {
                         aria-label={`Pick date for ${r.structure}`}
                         className="rounded border border-slate-300 bg-white px-1 py-0.5 text-sm print:hidden"
                       />
+                      {isHeader && pickVaries && (
+                        <span
+                          className="ml-1 text-xs font-semibold text-amber-700 print:hidden"
+                          title="The pieces of this structure have different pick dates. Showing the earliest; open the structure to see each one."
+                        >
+                          varies
+                        </span>
+                      )}
                       <span className="hidden print:inline">
-                        {fmtDate(r.pick_date)}
+                        {fmtDate(isHeader ? structPick : r.pick_date)}
                       </span>
                     </td>
                     <td
