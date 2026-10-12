@@ -21,6 +21,14 @@ type Dismissed = Record<string, string>; // key -> "forever" or the date it come
 const PAGE = 1000;
 const LS_SET = "alert-settings";
 const LS_DIS = "alert-dismissed";
+const LS_REM = "reminders";
+
+type Reminder = {
+  id: string;
+  text: string;
+  date: string | null; // shows from this day on; null = shows until done
+  jobId: string | null;
+};
 
 const us = (d: string) => {
   const [, m, day] = d.split("-");
@@ -43,6 +51,11 @@ export default function NotificationBell() {
   const [settings, setSettings] = useState<AlertSettings>(DEFAULT_ALERTS);
   const [dismissed, setDismissed] = useState<Dismissed>({});
   const [note, setNote] = useState<string | null>(null);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [remText, setRemText] = useState("");
+  const [remDate, setRemDate] = useState("");
+  const [remJob, setRemJob] = useState("");
+  const remReady = useRef(false);
   const [today, setToday] = useState(todayIso());
   const ready = useRef(false);
   const box = useRef<HTMLDivElement>(null);
@@ -97,6 +110,20 @@ export default function NotificationBell() {
     if (s) setSettings({ ...DEFAULT_ALERTS, ...s });
     if (d) setDismissed(d);
     ready.current = true;
+
+    let r: Reminder[] | null = null;
+    const { data: rd, error: re } = await getSupabase()
+      .from("user_settings")
+      .select("reminders")
+      .maybeSingle();
+    if (!re && rd && Array.isArray(rd.reminders))
+      r = rd.reminders as Reminder[];
+    try {
+      const local = JSON.parse(localStorage.getItem(LS_REM) ?? "null");
+      if ((!r || r.length === 0) && Array.isArray(local)) r = local;
+    } catch {}
+    if (r) setReminders(r);
+    remReady.current = true;
   }, []);
 
   useEffect(() => {
@@ -127,6 +154,20 @@ export default function NotificationBell() {
     return () => clearTimeout(t);
   }, [settings, dismissed]);
 
+  // Save reminders shortly after they change (this computer, plus online when the column exists).
+  useEffect(() => {
+    if (!remReady.current) return;
+    const t = setTimeout(async () => {
+      try {
+        localStorage.setItem(LS_REM, JSON.stringify(reminders));
+      } catch {}
+      await getSupabase()
+        .from("user_settings")
+        .upsert({ reminders }, { onConflict: "user_id" });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [reminders]);
+
   // Close when clicking elsewhere.
   useEffect(() => {
     if (!open) return;
@@ -146,6 +187,56 @@ export default function NotificationBell() {
       }),
     [lines, settings, dismissed, today],
   );
+
+  const dueReminders = useMemo(
+    () =>
+      reminders
+        .filter((r) => !r.date || r.date <= today)
+        .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")),
+    [reminders, today],
+  );
+  const laterReminders = useMemo(
+    () =>
+      reminders
+        .filter((r) => r.date && r.date > today)
+        .sort((a, b) => a.date!.localeCompare(b.date!)),
+    [reminders, today],
+  );
+  const addReminder = () => {
+    const text = remText.trim();
+    if (!text) return;
+    setReminders((cur) => [
+      ...cur,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        text,
+        date: remDate || null,
+        jobId: remJob || null,
+      },
+    ]);
+    setRemText("");
+    setRemDate("");
+  };
+  const doneReminder = (id: string) =>
+    setReminders((cur) => cur.filter((r) => r.id !== id));
+  const snoozeReminder = (id: string) =>
+    setReminders((cur) =>
+      cur.map((r) => (r.id === id ? { ...r, date: addDays(today, 1) } : r)),
+    );
+  const remWhen = (r: Reminder) =>
+    !r.date
+      ? "no date"
+      : r.date === today
+        ? "today"
+        : r.date < today
+          ? `since ${dow(r.date)} ${us(r.date)}`
+          : `${dow(r.date)} ${us(r.date)}`;
+  const jobLabel = (id: string | null) => {
+    const j = id ? jobs[id] : null;
+    return j
+      ? `Job #${j.job_number}${j.location ? ` · ${j.location}` : ""}`
+      : "";
+  };
 
   const hide = (a: Alert, forever: boolean) =>
     setDismissed((cur) => ({
@@ -180,7 +271,10 @@ export default function NotificationBell() {
     setTimeout(() => window.print(), 100);
   };
 
-  const urgent = alerts.some((a) => a.kind === "overdue" || a.date === today);
+  const count = alerts.length + dueReminders.length;
+  const urgent =
+    dueReminders.length > 0 ||
+    alerts.some((a) => a.kind === "overdue" || a.date === today);
   const field =
     "w-14 rounded border border-slate-300 px-1.5 py-1 text-sm text-slate-900";
 
@@ -189,7 +283,7 @@ export default function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Notifications${alerts.length ? `, ${alerts.length} alerts` : ""}`}
+        aria-label={`Notifications${count ? `, ${count} alerts` : ""}`}
         title="Upcoming deliveries, pours and structures waiting in the yard"
         className="relative rounded-md border border-slate-300 bg-white px-3 py-2 text-navy hover:bg-slate-50"
       >
@@ -206,11 +300,11 @@ export default function NotificationBell() {
           <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
-        {alerts.length > 0 && (
+        {count > 0 && (
           <span
             className={`absolute -top-1.5 -right-1.5 min-w-5 rounded-full px-1 text-center text-xs font-bold text-white ${urgent ? "bg-brand-red" : "bg-navy"}`}
           >
-            {alerts.length}
+            {count}
           </span>
         )}
       </button>
@@ -241,6 +335,17 @@ export default function NotificationBell() {
                 </tr>
               </thead>
               <tbody>
+                {dueReminders.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-slate-300 align-top"
+                  >
+                    <td className="py-1 pr-2 font-semibold">Reminder</td>
+                    <td className="py-1 pr-2">{remWhen(r)}</td>
+                    <td className="py-1 pr-2">{jobLabel(r.jobId)}</td>
+                    <td className="py-1">{r.text}</td>
+                  </tr>
+                ))}
                 {alerts.map((a) => {
                   const job = jobs[a.jobId];
                   return (
@@ -271,11 +376,11 @@ export default function NotificationBell() {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-[26rem] max-w-[92vw] rounded-xl border border-slate-200 bg-white text-slate-900 shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <p className="font-semibold text-navy">Alerts</p>
+            <p className="font-semibold text-navy">Alerts &amp; reminders</p>
             <div className="flex gap-3">
               <button
                 onClick={printAlerts}
-                disabled={alerts.length === 0}
+                disabled={count === 0}
                 className="text-xs text-navy hover:underline disabled:opacity-40"
               >
                 Print alerts
@@ -290,11 +395,51 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto">
-            {alerts.length === 0 && (
+            {count === 0 && (
               <p className="px-4 py-6 text-center text-sm text-slate-500">
                 Nothing needs attention right now.
               </p>
             )}
+            {dueReminders.map((r) => (
+              <div
+                key={r.id}
+                className="border-b border-slate-100 bg-amber-50/60 px-4 py-3 text-sm"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <span className="font-semibold text-brand-red">
+                      Reminder · {remWhen(r)}
+                    </span>
+                    <span className="block whitespace-pre-wrap text-slate-800">
+                      {r.text}
+                    </span>
+                    {r.jobId && jobs[r.jobId] && (
+                      <a
+                        href={withJob("/structures", r.jobId)}
+                        onClick={() => rememberJob(r.jobId!)}
+                        className="block text-xs text-navy hover:underline"
+                      >
+                        {jobLabel(r.jobId)}
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-slate-500">
+                    <button
+                      onClick={() => doneReminder(r.id)}
+                      className="font-medium text-navy hover:underline"
+                    >
+                      Done
+                    </button>
+                    <button
+                      onClick={() => snoozeReminder(r.id)}
+                      className="hover:underline"
+                    >
+                      Tomorrow
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
             {alerts.map((a) => {
               const job = jobs[a.jobId];
               const red = a.kind === "overdue" || a.date === today;
@@ -362,6 +507,86 @@ export default function NotificationBell() {
               );
             })}
           </div>
+
+          <details className="border-t border-slate-200 px-4 py-3 text-sm">
+            <summary className="cursor-pointer font-medium text-navy">
+              Reminders{reminders.length ? ` (${reminders.length})` : ""} · add
+              new
+            </summary>
+            <div className="mt-3 space-y-2">
+              <textarea
+                value={remText}
+                onChange={(e) => setRemText(e.target.value)}
+                placeholder="e.g. Call ESCO about the MOD A2.1 delivery"
+                rows={2}
+                className="w-full rounded border border-slate-300 px-2 py-1 text-sm text-slate-900"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1 text-slate-600">
+                  Remind me on
+                  <input
+                    type="date"
+                    value={remDate}
+                    onChange={(e) => setRemDate(e.target.value)}
+                    className="rounded border border-slate-300 px-1.5 py-1 text-slate-900"
+                  />
+                </label>
+                <select
+                  value={remJob}
+                  onChange={(e) => setRemJob(e.target.value)}
+                  className="min-w-0 flex-1 rounded border border-slate-300 px-1.5 py-1 text-slate-900"
+                >
+                  <option value="">No job</option>
+                  {Object.values(jobs).map((j) => (
+                    <option key={j.id} value={j.id}>
+                      #{j.job_number}
+                      {j.location ? ` · ${j.location}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={addReminder}
+                disabled={!remText.trim()}
+                className="rounded-md bg-navy px-3 py-1.5 font-medium text-white disabled:opacity-40"
+              >
+                Add reminder
+              </button>
+              <p className="text-xs text-slate-500">
+                Leave the date empty to be reminded until you tick it Done. It
+                shows in the bell from that day on.
+              </p>
+              {laterReminders.length > 0 && (
+                <div className="border-t border-slate-200 pt-2">
+                  <p className="mb-1 text-xs font-semibold text-slate-600">
+                    Coming up
+                  </p>
+                  {laterReminders.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-start gap-2 py-0.5 text-xs"
+                    >
+                      <span className="w-16 shrink-0 text-slate-500">
+                        {remWhen(r)}
+                      </span>
+                      <span className="flex-1">
+                        {r.text}
+                        {r.jobId && jobs[r.jobId]
+                          ? ` (#${jobs[r.jobId].job_number})`
+                          : ""}
+                      </span>
+                      <button
+                        onClick={() => doneReminder(r.id)}
+                        className="text-slate-500 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
 
           <details className="border-t border-slate-200 px-4 py-3 text-sm">
             <summary className="cursor-pointer font-medium text-navy">
