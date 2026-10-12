@@ -15,7 +15,10 @@ import {
   DEFAULT_LIMIT,
   buildItems,
   buildReport,
+  money,
+  sumC,
   sumW,
+  type Costs,
   todayIso,
   type LLine,
   type ManualItem,
@@ -34,7 +37,14 @@ const dow = (d: string) =>
 const n = (x: number, one: string, many = `${one}s`) =>
   `${x.toLocaleString("en-US")} ${x === 1 ? one : many}`;
 
-const blank = { name: "", description: "", qty: "1", weight: "", pick: "" };
+const blank = {
+  name: "",
+  description: "",
+  qty: "1",
+  weight: "",
+  cost: "",
+  pick: "",
+};
 
 export default function Logistics() {
   const { job, loading: jobLoading } = useActiveJob();
@@ -43,6 +53,7 @@ export default function Logistics() {
   const [loaded, setLoaded] = useState(false);
   const [limitText, setLimitText] = useState(String(DEFAULT_LIMIT));
   const [manual, setManual] = useState<ManualItem[]>([]);
+  const [costs, setCosts] = useState<Costs>({});
   const [form, setForm] = useState(blank);
   const [error, setError] = useState<string | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
@@ -72,6 +83,7 @@ export default function Logistics() {
     ["day", "Delivery schedule by day"],
     ["yard", "Yard and risk list"],
     ["load", "Truckload grouping"],
+    ["cost", "Costs"],
   ];
   const ready = useRef(false); // settings loaded; changes after this get saved
 
@@ -103,12 +115,29 @@ export default function Logistics() {
     setLoaded(true);
 
     // Settings: online if the table exists, otherwise this computer's copy.
-    let s: { truck_limit?: number; manual?: ManualItem[] } | null = null;
-    const { data: row, error: se } = await supabase
+    type Saved = {
+      truck_limit?: number;
+      manual?: ManualItem[];
+      costs?: Costs;
+    };
+    let s: Saved | null = null;
+    let { data: row, error: se } = await supabase
       .from("job_logistics")
-      .select("truck_limit, manual")
+      .select("truck_limit, manual, costs")
       .eq("job_id", jobId)
       .maybeSingle();
+    // Older table without the costs column: load the rest and keep costs on this computer.
+    if (se && /costs/i.test(se.message)) {
+      ({ data: row, error: se } = await supabase
+        .from("job_logistics")
+        .select("truck_limit, manual")
+        .eq("job_id", jobId)
+        .maybeSingle());
+      try {
+        const loc = JSON.parse(localStorage.getItem(localKey) ?? "null");
+        if (loc?.costs) setCosts(loc.costs);
+      } catch {}
+    }
     if (se) {
       setSaveNote(
         `Settings are saved on this computer only (${se.message}). Run supabase/logistics.sql in Supabase to save them online.`,
@@ -117,7 +146,7 @@ export default function Logistics() {
         s = JSON.parse(localStorage.getItem(localKey) ?? "null");
       } catch {}
     } else if (row) {
-      s = row as { truck_limit?: number; manual?: ManualItem[] };
+      s = row as Saved;
     } else {
       try {
         s = JSON.parse(localStorage.getItem(localKey) ?? "null");
@@ -125,6 +154,7 @@ export default function Logistics() {
     }
     if (s?.truck_limit) setLimitText(String(s.truck_limit));
     if (Array.isArray(s?.manual)) setManual(s!.manual!);
+    if (s?.costs && typeof s.costs === "object") setCosts(s.costs);
     ready.current = true;
   }, [jobId, localKey]);
 
@@ -139,15 +169,30 @@ export default function Logistics() {
       try {
         localStorage.setItem(
           localKey,
-          JSON.stringify({ truck_limit: limit, manual }),
+          JSON.stringify({ truck_limit: limit, manual, costs }),
         );
       } catch {}
-      const { error: e } = await getSupabase()
+      const sb = getSupabase();
+      let { error: e } = await sb
         .from("job_logistics")
         .upsert(
-          { job_id: jobId, truck_limit: limit, manual },
+          { job_id: jobId, truck_limit: limit, manual, costs },
           { onConflict: "job_id" },
         );
+      if (e && /costs/i.test(e.message)) {
+        // costs column not added yet: still save the limit and hand-added items.
+        ({ error: e } = await sb
+          .from("job_logistics")
+          .upsert(
+            { job_id: jobId, truck_limit: limit, manual },
+            { onConflict: "job_id" },
+          ));
+        if (!e)
+          setSaveNote(
+            "Costs are saved on this computer only. Run supabase/logistics_costs.sql in Supabase to save them online.",
+          );
+        return;
+      }
       setSaveNote(
         e
           ? `Settings are saved on this computer only (${e.message}). Run supabase/logistics.sql in Supabase to save them online.`
@@ -155,10 +200,13 @@ export default function Logistics() {
       );
     }, 600);
     return () => clearTimeout(t);
-  }, [limit, manual, jobId, localKey]);
+  }, [limit, manual, costs, jobId, localKey]);
 
   const today = todayIso();
-  const items = useMemo(() => buildItems(lines, manual), [lines, manual]);
+  const items = useMemo(
+    () => buildItems(lines, manual, costs),
+    [lines, manual, costs],
+  );
   const r = useMemo(
     () => buildReport(items, limit, today),
     [items, limit, today],
@@ -175,6 +223,7 @@ export default function Logistics() {
         description: form.description.trim(),
         qty: Math.max(1, Number(form.qty) || 1),
         weight: w,
+        cost: Number(form.cost.replace(/[$,\s]/g, "")) || 0,
         pick: form.pick,
       },
     ]);
@@ -312,6 +361,13 @@ export default function Logistics() {
                 inputMode="numeric"
                 className={`${field} w-36`}
               />
+              <input
+                placeholder="Cost each ($)"
+                value={form.cost}
+                onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                inputMode="decimal"
+                className={`${field} w-32`}
+              />
               <label className="text-xs text-slate-600">
                 Delivery date
                 <input
@@ -330,6 +386,58 @@ export default function Logistics() {
               </button>
             </div>
 
+            <details className="mt-4 text-sm">
+              <summary className="cursor-pointer font-semibold text-navy">
+                Cost per structure
+                {items.some((i) => !i.manual) &&
+                  ` (${items.filter((i) => !i.manual && i.cost > 0).length} of ${items.filter((i) => !i.manual).length} entered · total ${money(sumC(items))})`}
+              </summary>
+              <p className="mt-2 mb-2 text-xs text-slate-600">
+                Type the cost of each structure. Totals appear in the report per
+                delivery day, per truckload and for the whole job. Costs are
+                saved with this job.
+              </p>
+              <div className="max-h-80 overflow-auto rounded-md border border-slate-200">
+                <table className="w-full border-collapse text-sm">
+                  <thead className="sticky top-0 bg-slate-100 text-left text-xs">
+                    <tr>
+                      <th className="px-2 py-1">Structure</th>
+                      <th className="px-2 py-1">Pick date</th>
+                      <th className="px-2 py-1 text-right">Weight</th>
+                      <th className="px-2 py-1">Cost ($)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items
+                      .filter((i) => !i.manual)
+                      .map((i) => (
+                        <tr key={i.key} className="border-t border-slate-100">
+                          <td className="px-2 py-1 font-medium">{i.name}</td>
+                          <td className="px-2 py-1">{us(i.pick)}</td>
+                          <td className="px-2 py-1 text-right tabular-nums">
+                            {lb(i.weight)}
+                          </td>
+                          <td className="px-2 py-1">
+                            <input
+                              value={costs[i.key] ?? ""}
+                              onChange={(e) =>
+                                setCosts((c) => ({
+                                  ...c,
+                                  [i.key]: e.target.value,
+                                }))
+                              }
+                              inputMode="decimal"
+                              placeholder="0.00"
+                              className={`${field} w-32 py-1`}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+
             {manual.length > 0 && (
               <ul className="mt-3 divide-y divide-slate-100 text-sm">
                 {manual.map((m) => (
@@ -337,7 +445,8 @@ export default function Logistics() {
                     <span className="flex-1">
                       <strong>{m.name}</strong>
                       {m.description ? ` · ${m.description}` : ""} · {m.qty} ×{" "}
-                      {lb(m.weight)} · {us(m.pick)}
+                      {lb(m.weight)}
+                      {m.cost ? ` · ${money(m.cost)} each` : ""} · {us(m.pick)}
                     </span>
                     <button
                       onClick={() =>
@@ -399,6 +508,9 @@ export default function Logistics() {
                         <th className={th}>Status</th>
                         <th className={`${th} text-right`}>Structures</th>
                         <th className={`${th} text-right`}>Weight</th>
+                        <th className={`${th} text-right ${skip("cost")}`}>
+                          Cost
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -419,6 +531,11 @@ export default function Logistics() {
                           <td className={`${td} text-right tabular-nums`}>
                             {lb(sumW(xs as { weight: number }[]))}
                           </td>
+                          <td
+                            className={`${td} text-right tabular-nums ${skip("cost")}`}
+                          >
+                            {money(sumC(xs as { cost: number }[]))}
+                          </td>
                         </tr>
                       ))}
                       <tr className="font-bold">
@@ -428,6 +545,11 @@ export default function Logistics() {
                         </td>
                         <td className={`${td} text-right tabular-nums`}>
                           {lb(r.totalWeight)}
+                        </td>
+                        <td
+                          className={`${td} text-right tabular-nums ${skip("cost")}`}
+                        >
+                          {money(r.totalCost)}
                         </td>
                       </tr>
                     </tbody>
@@ -447,6 +569,9 @@ export default function Logistics() {
                           <th className={th}>Delivery date</th>
                           <th className={`${th} text-right`}>Structures</th>
                           <th className={`${th} text-right`}>Weight</th>
+                          <th className={`${th} text-right ${skip("cost")}`}>
+                            Cost
+                          </th>
                           <th className={`${th} text-right`}>Truckloads</th>
                         </tr>
                       </thead>
@@ -468,6 +593,11 @@ export default function Logistics() {
                               <td className={`${td} text-right tabular-nums`}>
                                 {lb(d.weight)}
                               </td>
+                              <td
+                                className={`${td} text-right tabular-nums ${skip("cost")}`}
+                              >
+                                {money(d.cost)}
+                              </td>
                               <td className={`${td} text-right tabular-nums`}>
                                 {d.loads.length}
                               </td>
@@ -484,6 +614,11 @@ export default function Logistics() {
                                 <td className={td}></td>
                                 <td className={`${td} text-right tabular-nums`}>
                                   {lb(it.weight)}
+                                </td>
+                                <td
+                                  className={`${td} text-right tabular-nums ${skip("cost")}`}
+                                >
+                                  {it.cost ? money(it.cost) : ""}
                                 </td>
                                 <td className={`${td} text-right`}>
                                   Load{" "}
@@ -502,6 +637,11 @@ export default function Logistics() {
                           </td>
                           <td className={`${td} text-right tabular-nums`}>
                             {lb(sumW(r.scheduled))}
+                          </td>
+                          <td
+                            className={`${td} text-right tabular-nums ${skip("cost")}`}
+                          >
+                            {money(sumC(r.scheduled))}
                           </td>
                           <td className={`${td} text-right tabular-nums`}>
                             {totalLoads}
@@ -611,11 +751,16 @@ export default function Logistics() {
                       <p className="font-semibold text-navy">
                         {dow(d.date)} {us(d.date)} — {n(d.loads.length, "load")}
                         , {lb(d.weight)}
+                        <span className={skip("cost")}>, {money(d.cost)}</span>
                       </p>
                       {d.loads.map((l, i) => (
                         <p key={i} className="ml-3 text-xs">
                           <strong>Load {i + 1}</strong> · {lb(l.weight)} (
                           {Math.round((l.weight / limit) * 100)}% of limit)
+                          <span className={skip("cost")}>
+                            {" "}
+                            · {money(sumC(l.items))}
+                          </span>
                           {l.over && (
                             <span className="font-semibold text-brand-red">
                               {" "}

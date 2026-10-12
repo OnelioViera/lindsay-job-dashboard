@@ -19,6 +19,18 @@ export type ManualItem = {
   qty: number;
   weight: number; // lb each
   pick: string; // delivery date, YYYY-MM-DD
+  cost?: number; // $ each
+};
+
+/** Cost typed per structure, keyed by Structure ID (kept as text so "12." can be typed). */
+export type Costs = Record<string, string>;
+
+export const money = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+const parseCost = (t: string | undefined) => {
+  const n = Number((t ?? "").replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? n : 0;
 };
 
 export type LItem = {
@@ -26,6 +38,7 @@ export type LItem = {
   name: string;
   description: string;
   weight: number; // total lb
+  cost: number; // total $
   ready: string | null;
   pick: string | null;
   manual: boolean;
@@ -36,6 +49,7 @@ export type Day = {
   date: string;
   items: LItem[];
   weight: number;
+  cost: number;
   loads: Load[];
 };
 
@@ -48,7 +62,11 @@ const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true });
 
 /** One item per structure: weight is the sum of the Weight shown on each of its lines. */
-export function buildItems(lines: LLine[], manual: ManualItem[]): LItem[] {
+export function buildItems(
+  lines: LLine[],
+  manual: ManualItem[],
+  costs: Costs = {},
+): LItem[] {
   const by = new Map<string, LItem>();
   for (const l of lines) {
     const w = Number(l.weight) || 0; // the Weight shown on each Tracker line
@@ -57,6 +75,7 @@ export function buildItems(lines: LLine[], manual: ManualItem[]): LItem[] {
       name: l.structure,
       description: l.description ?? "",
       weight: 0,
+      cost: parseCost(costs[l.structure]),
       ready: null,
       pick: null,
       manual: false,
@@ -76,6 +95,7 @@ export function buildItems(lines: LLine[], manual: ManualItem[]): LItem[] {
       name: m.name || "(added by hand)",
       description: m.description,
       weight: (Number(m.weight) || 0) * (Number(m.qty) || 1),
+      cost: (Number(m.cost) || 0) * (Number(m.qty) || 1),
       ready: null,
       pick: m.pick || null,
       manual: true,
@@ -104,6 +124,7 @@ export function packLoads(items: LItem[], limit: number): Load[] {
 export type Report = {
   total: number;
   totalWeight: number;
+  totalCost: number;
   picked: LItem[]; // pick date already passed
   scheduled: LItem[]; // pick date today or later
   yard: (LItem & { waiting: number })[]; // ready, no pick date
@@ -146,12 +167,14 @@ export function buildReport(
       date,
       items: its.sort((a, b) => natural(a.name, b.name)),
       weight: its.reduce((n, i) => n + i.weight, 0),
+      cost: its.reduce((n, i) => n + i.cost, 0),
       loads: packLoads(its, limit),
     }));
 
   return {
     total: items.length,
     totalWeight: items.reduce((n, i) => n + i.weight, 0),
+    totalCost: items.reduce((n, i) => n + i.cost, 0),
     picked,
     scheduled,
     yard,
@@ -164,3 +187,6 @@ export function buildReport(
 
 export const sumW = (xs: { weight: number }[]) =>
   xs.reduce((n, i) => n + i.weight, 0);
+
+export const sumC = (xs: { cost: number }[]) =>
+  xs.reduce((n, i) => n + i.cost, 0);
