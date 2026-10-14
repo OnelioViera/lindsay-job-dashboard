@@ -27,7 +27,7 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "structure", label: "Structure ID" },
   { key: "sch_date", label: "Scheduled Date" },
   { key: "ready_date", label: "Ready Date" },
-  { key: "pick_date", label: "Pick Date" },
+  { key: "pick_date", label: "Pick Date (earliest first, undated last)" },
 ];
 
 type DateKey = "any" | "sch_date" | "ready_date" | "pick_date";
@@ -122,7 +122,7 @@ export default function Tracker() {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<Set<FilterKey>>(new Set());
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<SortKey>("paste");
+  const [sort, setSort] = useState<SortKey>("pick_date");
   const [showImport, setShowImport] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [editRow, setEditRow] = useState<Row | null>(null);
@@ -166,7 +166,7 @@ export default function Tracker() {
         const u = JSON.parse(raw);
         setActive(new Set(u.active ?? []));
         setSearch(u.search ?? "");
-        setSort(u.sort ?? "paste");
+        setSort(u.sort ?? "pick_date");
         setSelected(new Set(u.selected ?? []));
         setNeedsPour(!!u.needsPour);
         setQuick(u.quick ?? null);
@@ -185,7 +185,7 @@ export default function Tracker() {
         sessionStorage.removeItem("tracker-focus");
         setActive(new Set());
         setSearch("");
-        setSort("paste");
+        setSort("pick_date");
         setSelected(new Set());
         setNeedsPour(false);
         setQuick(null);
