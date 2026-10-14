@@ -344,6 +344,7 @@ export default function Tracker() {
     ["weight", "Weight"],
     ["uom", "UOM"],
     ["price", "Price (Titan ExtPrice)"],
+    ["delivery", "Delivery address & contact"],
     ["alerts", "Alerts (this job)"],
   ];
   // Alerts for this job only, same rules and snoozes as the bell.
@@ -368,7 +369,7 @@ export default function Tracker() {
     });
   }, [rows, jobId, alertSettings, alertDismissed, todayStr]);
   const [noPrint, setNoPrint] = useState<Set<string>>(
-    new Set(["dept", "uom", "price"]),
+    new Set(["dept", "uom", "price", "delivery"]),
   );
   useEffect(() => {
     try {
@@ -379,6 +380,11 @@ export default function Tracker() {
         if (!localStorage.getItem("print-price-seen")) {
           set.add("price");
           localStorage.setItem("print-price-seen", "1");
+        }
+        // Delivery address & contact is new: off until you tick it.
+        if (!localStorage.getItem("print-delivery-seen")) {
+          set.add("delivery");
+          localStorage.setItem("print-delivery-seen", "1");
         }
         setNoPrint(set);
       }
@@ -403,6 +409,39 @@ export default function Tracker() {
       }
     } catch {}
   };
+  // Delivery address and site contact: optional, kept per job on this computer.
+  type Delivery = { address: string; contact: string; phone: string };
+  const [delivery, setDelivery] = useState<Delivery>({
+    address: "",
+    contact: "",
+    phone: "",
+  });
+  useEffect(() => {
+    if (!jobId) return;
+    try {
+      const v = localStorage.getItem(`tracker-delivery:${jobId}`);
+      setDelivery(v ? JSON.parse(v) : { address: "", contact: "", phone: "" });
+    } catch {}
+  }, [jobId]);
+  const changeDelivery = (k: keyof Delivery, v: string) => {
+    const next = { ...delivery, [k]: v };
+    setDelivery(next);
+    try {
+      if (jobId) {
+        if (next.address || next.contact || next.phone)
+          localStorage.setItem(
+            `tracker-delivery:${jobId}`,
+            JSON.stringify(next),
+          );
+        else localStorage.removeItem(`tracker-delivery:${jobId}`);
+      }
+    } catch {}
+  };
+  const hasDelivery = !!(
+    delivery.address.trim() ||
+    delivery.contact.trim() ||
+    delivery.phone.trim()
+  );
   useEffect(() => {
     try {
       setPrintTitle(localStorage.getItem("print-title") ?? "");
@@ -1028,6 +1067,35 @@ export default function Tracker() {
         </label>
       )}
 
+      {rows.length > 0 && (
+        <div className="mb-3 grid gap-2 text-sm sm:grid-cols-[2fr_1fr_1fr] print:hidden">
+          {(
+            [
+              ["address", "Delivery address", "Street, city, state, zip"],
+              ["contact", "Contact name", "Who to call on site"],
+              ["phone", "Contact phone", "(719) 555-0123"],
+            ] as const
+          ).map(([k, label, ph]) => (
+            <label key={k} className="block">
+              <span className="font-medium text-navy">
+                {label}{" "}
+                <span className="font-normal text-slate-500">(optional)</span>
+              </span>
+              <input
+                value={delivery[k]}
+                onChange={(e) => changeDelivery(k, e.target.value)}
+                placeholder={ph}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20"
+              />
+            </label>
+          ))}
+          <p className="text-xs text-slate-500 sm:col-span-3">
+            Printed on the PDF only when “Delivery address &amp; contact” is
+            ticked in Print columns. Saved for this job on this computer.
+          </p>
+        </div>
+      )}
+
       {/* Delete toolbar */}
       {rows.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 text-sm print:hidden">
@@ -1633,6 +1701,35 @@ export default function Tracker() {
           </div>
         )}
       </section>
+
+      {hasDelivery && (
+        <div
+          data-col="delivery"
+          className="mt-4 hidden break-inside-avoid text-sm text-slate-900 print:block"
+        >
+          <p className="mb-1 border-b border-slate-400 font-bold text-navy">
+            Delivery information
+          </p>
+          {delivery.address.trim() && (
+            <p>
+              <span className="font-semibold">Address:</span>{" "}
+              {delivery.address.trim()}
+            </p>
+          )}
+          {delivery.contact.trim() && (
+            <p>
+              <span className="font-semibold">Contact:</span>{" "}
+              {delivery.contact.trim()}
+            </p>
+          )}
+          {delivery.phone.trim() && (
+            <p>
+              <span className="font-semibold">Phone:</span>{" "}
+              {delivery.phone.trim()}
+            </p>
+          )}
+        </div>
+      )}
 
       {notes.trim() && (
         <div className="mt-4 hidden break-inside-avoid text-sm text-slate-900 print:block">
