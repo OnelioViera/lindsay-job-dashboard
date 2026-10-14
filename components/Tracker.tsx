@@ -652,6 +652,27 @@ export default function Tracker() {
     );
   };
 
+  // Choose the plant by hand (FPC-DAC, FPC-A or FPC-DAC/A): saves it on the given lines.
+  const PLANTS = ["FPC-DAC", "FPC-A", "FPC-DAC/A"];
+  const setPlant = async (ids: string[], plant: string | null) => {
+    if (ids.length === 0) return;
+    const supabase = getSupabase();
+    for (let i = 0; i < ids.length; i += 100) {
+      const { error } = await supabase
+        .from("titan_lines")
+        .update({ plant_id: plant })
+        .in("id", ids.slice(i, i + 100));
+      if (error) {
+        setError(`Could not save the plant: ${error.message}`);
+        return;
+      }
+    }
+    const set = new Set(ids);
+    setRows((prev) =>
+      prev.map((r) => (set.has(r.id) ? { ...r, plant_id: plant } : r)),
+    );
+  };
+
   const activeLabels = FILTERS.filter((f) => active.has(f.key)).map(
     (f) => f.label,
   );
@@ -1452,7 +1473,28 @@ export default function Tracker() {
                       data-col="plant"
                       className="px-2 py-2 whitespace-nowrap print:whitespace-normal print:px-1.5"
                     >
-                      {r.plant_id}
+                      <select
+                        value={r.plant_id ?? ""}
+                        onChange={(e) =>
+                          void setPlant(
+                            isHeader ? g.lines.map((l) => l.id) : [r.id],
+                            e.target.value || null,
+                          )
+                        }
+                        aria-label={`Plant for ${r.structure}`}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-sm print:hidden"
+                      >
+                        <option value="">—</option>
+                        {r.plant_id && !PLANTS.includes(r.plant_id) && (
+                          <option value={r.plant_id}>{r.plant_id}</option>
+                        )}
+                        {PLANTS.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="hidden print:inline">{r.plant_id}</span>
                     </td>
                     <td
                       data-col="dept"

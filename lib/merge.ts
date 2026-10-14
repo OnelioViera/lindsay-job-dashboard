@@ -140,6 +140,8 @@ export function planMerge(
     }
     // A pick date typed in by hand survives a paste where Titan has none yet.
     if (!r.pickDate && l.pick_date) r.pickDate = l.pick_date;
+    // Same for a plant chosen by hand.
+    if (!r.plantId && l.plant_id) r.plantId = l.plant_id;
 
     const changes: Change[] = [];
     const add = (label: string, from: string, to: string, differs: boolean) => {
