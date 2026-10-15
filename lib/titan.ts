@@ -16,6 +16,11 @@ export type ParsedRow = {
   product: string;
   qty: number | null; // QO (quantity ordered)
   extPrice: number | null; // ExtPrice ($ for the line)
+  loadNo: string; // Load (the truck this line rides on)
+  qtyPro: number | null; // Qty_Pro (produced)
+  qtyShp: number | null; // Qty_Shp (shipped)
+  shipDate: string | null; // Ship_ Date
+  unitYards: number | null; // Unit Yards
 };
 
 export type ParseResult = {
@@ -133,6 +138,11 @@ export function parseTitan(text: string): ParseResult {
     product: col("Product"),
     qty: col("QO", "Qty"),
     price: col("ExtPrice", "Ext Price", "Extended Price"),
+    load: col("Load", "Load No"),
+    qtyPro: col("Qty_Pro"),
+    qtyShp: col("Qty_Shp"),
+    shipDate: col("Ship_ Date", "Ship Date"),
+    yards: col("Unit Yards"),
   };
 
   if (c.structure < 0) {
@@ -161,9 +171,16 @@ export function parseTitan(text: string): ParseResult {
     product: "Product",
     qty: "QO",
     price: "ExtPrice",
+    load: "Load",
+    qtyPro: "Qty_Pro",
+    qtyShp: "Qty_Shp",
+    shipDate: "Ship_ Date",
+    yards: "Unit Yards",
   };
+  // Optional columns (for the Logistics report): never warned about when they are not in a paste.
+  const optional = new Set(["load", "qtyPro", "qtyShp", "shipDate", "yards"]);
   const missing = (Object.keys(c) as (keyof typeof c)[])
-    .filter((k) => c[k] < 0)
+    .filter((k) => c[k] < 0 && !optional.has(k))
     .map((k) => labels[k]);
   const fieldOf: Record<keyof typeof c, keyof ParsedRow> = {
     pri: "priority",
@@ -180,6 +197,11 @@ export function parseTitan(text: string): ParseResult {
     product: "product",
     qty: "qty",
     price: "extPrice",
+    load: "loadNo",
+    qtyPro: "qtyPro",
+    qtyShp: "qtyShp",
+    shipDate: "shipDate",
+    yards: "unitYards",
   };
   const absent = (Object.keys(c) as (keyof typeof c)[])
     .filter((k) => c[k] < 0)
@@ -216,6 +238,11 @@ export function parseTitan(text: string): ParseResult {
       product: get(r, c.product),
       qty: num(get(r, c.qty)),
       extPrice: num(get(r, c.price)),
+      loadNo: get(r, c.load),
+      qtyPro: num(get(r, c.qtyPro)),
+      qtyShp: num(get(r, c.qtyShp)),
+      shipDate: toIsoDate(get(r, c.shipDate)),
+      unitYards: num(get(r, c.yards)),
     });
   }
 

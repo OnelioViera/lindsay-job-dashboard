@@ -15,6 +15,7 @@ import {
   DEFAULT_LIMIT,
   buildItems,
   buildReport,
+  buildTitanLoads,
   money,
   sumC,
   sumW,
@@ -23,7 +24,7 @@ import {
   type LLine,
   type ManualItem,
 } from "@/lib/logistics";
-import { hasExtPrice } from "@/lib/priceColumn";
+import { EXTRA_COLS, hasExtPrice, hasTitanExtras } from "@/lib/priceColumn";
 import BackButton from "./BackButton";
 import UserBadge from "./UserBadge";
 
@@ -86,6 +87,8 @@ export default function Logistics() {
     ["load", "Truckload grouping"],
     ["cost", "Costs"],
     ["trucks", "Truckload numbers"],
+    ["tload", "Titan loads (real trucks)"],
+    ["yards", "Yardage"],
   ];
   const ready = useRef(false); // settings loaded; changes after this get saved
 
@@ -100,12 +103,14 @@ export default function Logistics() {
     const supabase = getSupabase();
     const all: LLine[] = [];
     const withPrice = await hasExtPrice();
+    const withExtras = await hasTitanExtras();
     for (let from = 0; ; from += 1000) {
       const { data, error: e } = await supabase
         .from("titan_lines")
         .select(
           "structure, description, ready_date, pick_date, weight, qty" +
-            (withPrice ? ", ext_price" : ""),
+            (withPrice ? ", ext_price" : "") +
+            (withExtras ? `, ${EXTRA_COLS}` : ""),
         )
         .eq("job_id", jobId)
         .order("sort_order")
@@ -236,6 +241,12 @@ export default function Logistics() {
     setForm(blank);
   };
 
+  const titanLoads = useMemo(
+    () => buildTitanLoads(lines, limit),
+    [lines, limit],
+  );
+  const showYards = r.totalYards > 0;
+  const yd = (v: number) => (v ? `${v.toFixed(1)} yd³` : "");
   const totalLoads = r.days.reduce((x, d) => x + d.loads.length, 0);
   const heading =
     "mb-1 border-b-2 border-navy pb-0.5 text-sm font-bold text-navy";
@@ -522,10 +533,16 @@ export default function Logistics() {
                         <th className={`${th} text-right ${skip("cost")}`}>
                           Cost
                         </th>
+                        {showYards && (
+                          <th className={`${th} text-right ${skip("yards")}`}>
+                            Yards
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {[
+                        ["Already shipped (per Titan)", r.shipped],
                         ["Already picked (pick date passed)", r.picked],
                         ["Scheduled for delivery", r.scheduled],
                         ["Ready, no pick date (in the yard)", r.yard],
@@ -547,6 +564,18 @@ export default function Logistics() {
                           >
                             {money(sumC(xs as { cost: number }[]))}
                           </td>
+                          {showYards && (
+                            <td
+                              className={`${td} text-right tabular-nums ${skip("yards")}`}
+                            >
+                              {yd(
+                                (xs as { yards: number }[]).reduce(
+                                  (a, i) => a + i.yards,
+                                  0,
+                                ),
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                       <tr className="font-bold">
@@ -562,9 +591,27 @@ export default function Logistics() {
                         >
                           {money(r.totalCost)}
                         </td>
+                        {showYards && (
+                          <td
+                            className={`${td} text-right tabular-nums ${skip("yards")}`}
+                          >
+                            {yd(r.totalYards)}
+                          </td>
+                        )}
                       </tr>
                     </tbody>
                   </table>
+                  {r.partlyShipped.length > 0 && (
+                    <p className="-mt-3 mb-5 text-xs text-slate-600">
+                      Partly shipped (some pieces gone, some still here):{" "}
+                      {r.partlyShipped
+                        .map(
+                          (i) =>
+                            `${i.name} (${i.shippedLines} of ${i.nLines} lines)`,
+                        )
+                        .join("; ")}
+                    </p>
+                  )}
                 </div>
                 {/* 3. Delivery schedule by day */}
                 <div className={skip("day")}>
@@ -583,6 +630,11 @@ export default function Logistics() {
                           <th className={`${th} text-right ${skip("cost")}`}>
                             Cost
                           </th>
+                          {showYards && (
+                            <th className={`${th} text-right ${skip("yards")}`}>
+                              Yards
+                            </th>
+                          )}
                           <th className={`${th} text-right ${skip("trucks")}`}>
                             Truckloads
                           </th>
@@ -611,6 +663,13 @@ export default function Logistics() {
                               >
                                 {money(d.cost)}
                               </td>
+                              {showYards && (
+                                <td
+                                  className={`${td} text-right tabular-nums ${skip("yards")}`}
+                                >
+                                  {yd(d.yards)}
+                                </td>
+                              )}
                               <td
                                 className={`${td} text-right tabular-nums ${skip("trucks")}`}
                               >
@@ -635,13 +694,29 @@ export default function Logistics() {
                                 >
                                   {it.cost ? money(it.cost) : ""}
                                 </td>
+                                {showYards && (
+                                  <td
+                                    className={`${td} text-right tabular-nums ${skip("yards")}`}
+                                  >
+                                    {yd(it.yards)}
+                                  </td>
+                                )}
                                 <td
                                   className={`${td} text-right ${skip("trucks")}`}
                                 >
-                                  Load{" "}
-                                  {d.loads.findIndex((l) =>
-                                    l.items.includes(it),
-                                  ) + 1}
+                                  {it.loadNos.length > 0
+                                    ? `Titan ${it.loadNos.join(", ")}`
+                                    : `Load ${
+                                        d.loads.findIndex((l) =>
+                                          l.items.includes(it),
+                                        ) + 1
+                                      }`}
+                                  {it.shippedLines > 0 && (
+                                    <span className="block text-[10px] text-slate-500">
+                                      {it.shippedLines} of {it.nLines} lines
+                                      shipped
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -660,6 +735,13 @@ export default function Logistics() {
                           >
                             {money(sumC(r.scheduled))}
                           </td>
+                          {showYards && (
+                            <td
+                              className={`${td} text-right tabular-nums ${skip("yards")}`}
+                            >
+                              {yd(r.scheduled.reduce((a, i) => a + i.yards, 0))}
+                            </td>
+                          )}
                           <td
                             className={`${td} text-right tabular-nums ${skip("trucks")}`}
                           >
@@ -795,6 +877,83 @@ export default function Logistics() {
                     </div>
                   ))}
                 </div>
+                {/* 6. Titan loads (the real trucks) */}
+                {titanLoads.length > 0 && (
+                  <div className={skip("tload")}>
+                    <h3 className={heading}>Titan loads (real trucks)</h3>
+                    <p className="mb-2 text-xs text-slate-600">
+                      From the Load number on each Titan line. A structure can
+                      ride on more than one load; each load shows the pieces on
+                      it.
+                    </p>
+                    <table className="mb-5 w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-navy text-white">
+                          <th className={th}>Load</th>
+                          <th className={th}>Pick date</th>
+                          <th className={th}>Structures</th>
+                          <th className={`${th} text-right`}>Weight</th>
+                          {showYards && (
+                            <th className={`${th} text-right ${skip("yards")}`}>
+                              Yards
+                            </th>
+                          )}
+                          <th className={`${th} text-right ${skip("cost")}`}>
+                            Cost
+                          </th>
+                          <th className={th}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {titanLoads.map((l) => (
+                          <tr
+                            key={l.loadNo}
+                            className="border-b border-slate-300 align-top"
+                          >
+                            <td className={`${td} font-semibold`}>
+                              {l.loadNo}
+                            </td>
+                            <td className={td}>{l.pick ? us(l.pick) : ""}</td>
+                            <td className={td}>
+                              {l.structures
+                                .map(
+                                  (s) =>
+                                    `${s.name} (${lb(s.weight)}${s.lines > 1 ? `, ${s.lines} lines` : ""})`,
+                                )
+                                .join(", ")}
+                            </td>
+                            <td className={`${td} text-right tabular-nums`}>
+                              {lb(l.weight)}
+                              <span className="block text-[10px] text-slate-500">
+                                {Math.round((l.weight / limit) * 100)}% of limit
+                              </span>
+                            </td>
+                            {showYards && (
+                              <td
+                                className={`${td} text-right tabular-nums ${skip("yards")}`}
+                              >
+                                {yd(l.yards)}
+                              </td>
+                            )}
+                            <td
+                              className={`${td} text-right tabular-nums ${skip("cost")}`}
+                            >
+                              {money(l.cost)}
+                            </td>
+                            <td className={td}>
+                              {l.shipped ? "Shipped" : ""}
+                              {l.over && (
+                                <span className="font-semibold text-brand-red">
+                                  {l.shipped ? " · " : ""}over the limit
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 <p className="mt-4 text-xs text-slate-500">
                   A structure’s weight is the sum of the Weight on each of its
                   lines in the Tracker. Based on the last Titan paste, pick
