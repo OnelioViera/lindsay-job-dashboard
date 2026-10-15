@@ -16,6 +16,8 @@ export type ParsedRow = {
   product: string;
   qty: number | null; // QO (quantity ordered)
   extPrice: number | null; // ExtPrice ($ for the line)
+  picked: boolean | null; // Pick check mark (-1 in Titan)
+  invoiceDate: string | null; // Invoice_ Date
 };
 
 export type ParseResult = {
@@ -133,6 +135,8 @@ export function parseTitan(text: string): ParseResult {
     product: col("Product"),
     qty: col("QO", "Qty"),
     price: col("ExtPrice", "Ext Price", "Extended Price"),
+    pickFlag: col("Pick"),
+    invoice: col("Invoice_ Date", "Invoice Date"),
   };
 
   if (c.structure < 0) {
@@ -161,9 +165,13 @@ export function parseTitan(text: string): ParseResult {
     product: "Product",
     qty: "QO",
     price: "ExtPrice",
+    pickFlag: "Pick",
+    invoice: "Invoice_ Date",
   };
+  // Optional: never warned about when not in a paste (the app keeps what it has).
+  const optional = new Set(["pickFlag", "invoice"]);
   const missing = (Object.keys(c) as (keyof typeof c)[])
-    .filter((k) => c[k] < 0)
+    .filter((k) => c[k] < 0 && !optional.has(k))
     .map((k) => labels[k]);
   const fieldOf: Record<keyof typeof c, keyof ParsedRow> = {
     pri: "priority",
@@ -180,6 +188,8 @@ export function parseTitan(text: string): ParseResult {
     product: "product",
     qty: "qty",
     price: "extPrice",
+    pickFlag: "picked",
+    invoice: "invoiceDate",
   };
   const absent = (Object.keys(c) as (keyof typeof c)[])
     .filter((k) => c[k] < 0)
@@ -216,6 +226,12 @@ export function parseTitan(text: string): ParseResult {
       product: get(r, c.product),
       qty: num(get(r, c.qty)),
       extPrice: num(get(r, c.price)),
+      // Titan shows a ticked Pick as -1 (or 1); 0 or blank is not picked.
+      picked:
+        c.pickFlag >= 0
+          ? Number(get(r, c.pickFlag)) !== 0 && get(r, c.pickFlag) !== ""
+          : null,
+      invoiceDate: toIsoDate(get(r, c.invoice)),
     });
   }
 

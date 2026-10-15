@@ -15,6 +15,8 @@ export type Row = {
   product: string | null;
   qty: number | null;
   ext_price?: number | null;
+  picked?: boolean | null; // Titan Pick check mark
+  invoice_date?: string | null; // Titan Invoice_ Date
 };
 
 export type FilterKey = "scheduled_pour" | "scheduled_delivery";

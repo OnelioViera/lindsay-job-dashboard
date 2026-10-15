@@ -12,6 +12,7 @@ import ManualLinesModal from "./ManualLinesModal";
 import JobBanner from "./JobBanner";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 import { analyze, QUICK_LABELS, type QuickKey } from "@/lib/metrics";
+import { DELIVERED_COLS, hasDeliveredCols } from "@/lib/priceColumn";
 import { ALERT_KIND_LABEL, alertWhen, buildAlerts } from "@/lib/alerts";
 import { useAlertSettings } from "@/lib/useAlertSettings";
 import { fmtMoney, hasExtPrice } from "@/lib/priceColumn";
@@ -293,13 +294,15 @@ export default function Tracker() {
     const supabase = getSupabase();
     const all: Row[] = [];
     const withPrice = await hasExtPrice();
+    const withDelivered = await hasDeliveredCols();
     // Supabase returns at most 1000 rows per request, so page through.
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from("titan_lines")
         .select(
           "id, sort_order, priority, structure, description, plant_id, production_dep, sch_date, ready_date, pro_date, pick_date, weight, uom, product, qty" +
-            (withPrice ? ", ext_price" : ""),
+            (withPrice ? ", ext_price" : "") +
+            (withDelivered ? `, ${DELIVERED_COLS}` : ""),
         )
         .eq("job_id", jobId)
         .order("sort_order", { ascending: true })
@@ -341,6 +344,7 @@ export default function Tracker() {
     ["sch", "Scheduled Date"],
     ["ready", "Ready Date"],
     ["pick", "Pick Date"],
+    ["delivered", "Picked / delivered (✔)"],
     ["weight", "Weight"],
     ["uom", "UOM"],
     ["price", "Price (Titan ExtPrice)"],
@@ -369,7 +373,7 @@ export default function Tracker() {
     });
   }, [rows, jobId, alertSettings, alertDismissed, todayStr]);
   const [noPrint, setNoPrint] = useState<Set<string>>(
-    new Set(["dept", "uom", "price", "delivery"]),
+    new Set(["dept", "uom", "price", "delivery", "delivered"]),
   );
   useEffect(() => {
     try {
@@ -385,6 +389,11 @@ export default function Tracker() {
         if (!localStorage.getItem("print-delivery-seen")) {
           set.add("delivery");
           localStorage.setItem("print-delivery-seen", "1");
+        }
+        // Picked / delivered is new: off until you tick it.
+        if (!localStorage.getItem("print-delivered-seen")) {
+          set.add("delivered");
+          localStorage.setItem("print-delivered-seen", "1");
         }
         setNoPrint(set);
       }
@@ -492,6 +501,22 @@ export default function Tracker() {
 
   const quickSets = useMemo(() => analyze(rows).sets, [rows]);
 
+  // Picked and delivered: Titan's Pick check mark, or an invoice date.
+  const isDone = (r: Row) => !!r.picked || !!r.invoice_date;
+  const doneBy = useMemo(() => {
+    const m = new Map<string, { done: number; total: number }>();
+    for (const r of rows) {
+      const e = m.get(r.structure) ?? { done: 0, total: 0 };
+      e.total++;
+      if (isDone(r)) e.done++;
+      m.set(r.structure, e);
+    }
+    return m;
+  }, [rows]);
+  const [doneFilter, setDoneFilter] = useState<
+    "all" | "open" | "partly" | "done"
+  >("all");
+
   const counts = useMemo(() => {
     const out = {} as Record<FilterKey, number>;
     for (const f of FILTERS) out[f.key] = rows.filter(f.test).length;
@@ -528,6 +553,14 @@ export default function Tracker() {
         .filter((r) => (pickedLines ? pickedLines.has(r.id) : true))
         .filter((r) => (quick ? quickSets[quick].has(r.structure) : true))
         .filter((r) => (inRange ? inRange.has(r.structure) : true))
+        .filter((r) => {
+          if (doneFilter === "all") return true;
+          const e = doneBy.get(r.structure);
+          if (!e) return true;
+          if (doneFilter === "open") return e.done === 0;
+          if (doneFilter === "partly") return e.done > 0 && e.done < e.total;
+          return e.done === e.total;
+        })
         .filter((r) =>
           tests.length === 0 ? true : tests.some((f) => f.test(r)),
         )
@@ -560,6 +593,8 @@ export default function Tracker() {
     pickedLines,
     quick,
     quickSets,
+    doneFilter,
+    doneBy,
   ]);
 
   const groups = useMemo<Group[]>(() => {
@@ -743,7 +778,7 @@ export default function Tracker() {
     return `${label}: ${dateFrom ? fmtDate(dateFrom) : "…"} – ${dateTo ? fmtDate(dateTo) : "…"}`;
   })();
 
-  const COLS = 14;
+  const COLS = 15;
 
   const headingText =
     printTitle || (picked ? "Schedule to pour" : "Structure Tracker");
@@ -1027,6 +1062,21 @@ export default function Tracker() {
             placeholder="Search structure, product or description…"
             className="w-64 rounded-md border border-slate-300 px-3 py-1.5 focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/20"
           />
+          <label className="flex items-center gap-2 text-slate-600">
+            Picked
+            <select
+              value={doneFilter}
+              onChange={(e) =>
+                setDoneFilter(e.target.value as typeof doneFilter)
+              }
+              className="rounded-md border border-slate-300 px-2 py-1.5"
+            >
+              <option value="all">All</option>
+              <option value="open">Not picked yet</option>
+              <option value="partly">Partly picked</option>
+              <option value="done">Picked / delivered</option>
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-slate-600">
             Sort by
             <select
@@ -1351,6 +1401,13 @@ export default function Tracker() {
                 Pick Date
               </th>
               <th
+                data-col="delivered"
+                title="Titan's Pick check mark, or an invoice date"
+                className="px-2 py-2 text-center print:px-1.5"
+              >
+                Picked
+              </th>
+              <th
                 data-col="weight"
                 className="px-2 py-2 text-right print:px-1.5"
               >
@@ -1434,6 +1491,7 @@ export default function Tracker() {
                 g.lines.length > 1 &&
                 (new Set(picks).size > 1 ||
                   (picks.length > 0 && picks.length < g.lines.length));
+              const doneCount = g.lines.filter(isDone).length;
               const priceTotal = g.lines.reduce(
                 (n, l) => n + (l.ext_price ?? 0),
                 0,
@@ -1609,6 +1667,44 @@ export default function Tracker() {
                       <span className="hidden print:inline">
                         {fmtDate(isHeader ? structPick : r.pick_date)}
                       </span>
+                    </td>
+                    <td
+                      data-col="delivered"
+                      className="px-2 py-2 text-center whitespace-nowrap print:px-1.5"
+                    >
+                      {isHeader && g.lines.length > 1 ? (
+                        doneCount === g.lines.length ? (
+                          <span
+                            className="font-bold text-green-700"
+                            title="Every piece is picked or invoiced"
+                          >
+                            ✔
+                          </span>
+                        ) : doneCount > 0 ? (
+                          <span
+                            className="text-xs font-semibold text-amber-700"
+                            title="Some pieces are picked or invoiced"
+                          >
+                            {doneCount} of {g.lines.length}
+                          </span>
+                        ) : null
+                      ) : isDone(r) ? (
+                        <span
+                          className="font-bold text-green-700"
+                          title={
+                            r.invoice_date
+                              ? `Invoiced ${fmtDate(r.invoice_date)}`
+                              : "Picked"
+                          }
+                        >
+                          ✔
+                          {r.invoice_date && (
+                            <span className="ml-1 text-[10px] font-normal text-slate-500">
+                              {fmtDate(r.invoice_date)}
+                            </span>
+                          )}
+                        </span>
+                      ) : null}
                     </td>
                     <td
                       data-col="weight"

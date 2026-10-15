@@ -4,14 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { parseTitan, type ParsedRow } from "@/lib/titan";
 import { planMerge, type DbLine } from "@/lib/merge";
-import { hasExtPrice } from "@/lib/priceColumn";
+import {
+  DELIVERED_COLS,
+  hasDeliveredCols,
+  hasExtPrice,
+} from "@/lib/priceColumn";
 
 const PAGE = 1000;
 const COLS =
   "id, import_batch, sort_order, priority, structure, description, plant_id, production_dep, sch_date, ready_date, pro_date, pick_date, weight, uom, product, qty";
 
-const record = (r: ParsedRow, index: number, price: boolean) => ({
+const record = (
+  r: ParsedRow,
+  index: number,
+  price: boolean,
+  delivered: boolean,
+) => ({
   ...(price ? { ext_price: r.extPrice } : {}),
+  ...(delivered ? { picked: !!r.picked, invoice_date: r.invoiceDate } : {}),
   sort_order: index,
   priority: r.priority,
   structure: r.structure,
@@ -43,17 +53,24 @@ export default function ImportModal({
   const [existing, setExisting] = useState<DbLine[] | null>(null);
   const [removeMissing, setRemoveMissing] = useState(false);
   const [price, setPrice] = useState(true); // titan_lines.ext_price exists
+  const [delivered, setDelivered] = useState(true); // titan_lines.picked exists
 
   // What this job already has, so a paste can be compared against it.
   useEffect(() => {
     (async () => {
       const withPrice = await hasExtPrice();
       setPrice(withPrice);
+      const withDelivered = await hasDeliveredCols();
+      setDelivered(withDelivered);
       const all: DbLine[] = [];
       for (let from = 0; ; from += PAGE) {
         const { data, error } = await getSupabase()
           .from("titan_lines")
-          .select(withPrice ? `${COLS}, ext_price` : COLS)
+          .select(
+            COLS +
+              (withPrice ? ", ext_price" : "") +
+              (withDelivered ? `, ${DELIVERED_COLS}` : ""),
+          )
           .eq("job_id", jobId)
           .order("sort_order", { ascending: true })
           .range(from, from + PAGE - 1);
@@ -96,7 +113,7 @@ export default function ImportModal({
     // 1) New lines first, under their own batch id so a failure can be rolled back.
     for (let i = 0; i < plan.inserts.length; i += 200) {
       const chunk = plan.inserts.slice(i, i + 200).map((x) => ({
-        ...record(x.row, x.index, price),
+        ...record(x.row, x.index, price, delivered),
         job_id: jobId,
         import_batch: batch,
       }));
@@ -119,7 +136,7 @@ export default function ImportModal({
         id: u.line.id,
         job_id: jobId,
         import_batch: u.line.import_batch,
-        ...record(u.row, u.index, price),
+        ...record(u.row, u.index, price, delivered),
       }));
       const { error } = await supabase
         .from("titan_lines")
@@ -269,6 +286,13 @@ export default function ImportModal({
             <p className="mt-2 text-sm text-amber-800">
               Prices (ExtPrice) won’t be saved yet. Run supabase/ext_price.sql
               in Supabase, then paste again.
+            </p>
+          )}
+
+          {!delivered && (
+            <p className="mt-2 text-sm text-amber-800">
+              Picked / delivered status won’t be saved yet. Run
+              supabase/delivered.sql in Supabase, then paste again.
             </p>
           )}
 
