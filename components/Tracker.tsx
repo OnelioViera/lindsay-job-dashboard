@@ -462,6 +462,49 @@ export default function Tracker() {
       localStorage.setItem("print-title", v);
     } catch {}
   };
+  // The Print title choices: add, rename and delete them. Kept on this computer.
+  const DEFAULT_TITLES = [
+    "Schedule to pour",
+    "Schedule for delivery",
+    "Schedule for customer pickup",
+    "Structure Tracker",
+  ];
+  const [titles, setTitles] = useState<string[]>(DEFAULT_TITLES);
+  const [editTitles, setEditTitles] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  useEffect(() => {
+    try {
+      const v = JSON.parse(
+        localStorage.getItem("print-title-options") ?? "null",
+      );
+      if (Array.isArray(v)) setTitles(v.filter((x) => typeof x === "string"));
+    } catch {}
+  }, []);
+  const saveTitles = (next: string[]) => {
+    setTitles(next);
+    try {
+      localStorage.setItem("print-title-options", JSON.stringify(next));
+    } catch {}
+  };
+  const addTitle = () => {
+    const t = newTitle.trim();
+    if (!t) return;
+    if (!titles.includes(t)) saveTitles([...titles, t]);
+    changePrintTitle(t);
+    setNewTitle("");
+  };
+  const renameTitle = (i: number, value: string) => {
+    const t = value.trim();
+    const old = titles[i];
+    if (!t || t === old || titles.includes(t)) return;
+    saveTitles(titles.map((x, j) => (j === i ? t : x)));
+    if (printTitle === old) changePrintTitle(t);
+  };
+  const deleteTitle = (i: number) => {
+    const old = titles[i];
+    saveTitles(titles.filter((_, j) => j !== i));
+    if (printTitle === old) changePrintTitle("");
+  };
   const togglePrintCol = (k: string) =>
     setNoPrint((prev) => {
       const next = new Set(prev);
@@ -1162,16 +1205,96 @@ export default function Tracker() {
               className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-slate-700"
             >
               <option value="">Automatic</option>
-              <option value="Schedule to pour">Schedule to pour</option>
-              <option value="Schedule for delivery">
-                Schedule for delivery
-              </option>
-              <option value="Schedule for customer pickup">
-                Schedule for customer pickup
-              </option>
-              <option value="Structure Tracker">Structure Tracker</option>
+              {printTitle && !titles.includes(printTitle) && (
+                <option value={printTitle}>{printTitle}</option>
+              )}
+              {titles.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </select>
           </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setEditTitles((o) => !o)}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 hover:border-navy hover:text-navy"
+            >
+              Edit titles
+            </button>
+            {editTitles && (
+              <div className="absolute left-0 z-30 mt-1 w-80 rounded-md border border-slate-300 bg-white p-3 shadow-lg">
+                <p className="mb-2 text-xs text-slate-500">
+                  Rename a title by editing it and pressing Enter. These are the
+                  choices in the Print title list.
+                </p>
+                {titles.map((t, i) => (
+                  <div key={`${t}-${i}`} className="mb-1 flex gap-1">
+                    <input
+                      defaultValue={t}
+                      onBlur={(e) => {
+                        renameTitle(i, e.target.value);
+                        e.target.value = titles[i] ?? t;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                      className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => deleteTitle(i)}
+                      title={`Delete "${t}"`}
+                      className="rounded border border-slate-300 px-2 text-brand-red hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+                {titles.length === 0 && (
+                  <p className="mb-1 text-xs text-slate-500">
+                    No titles yet. Add one below.
+                  </p>
+                )}
+                <div className="mt-2 flex gap-1 border-t border-slate-200 pt-2">
+                  <input
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addTitle();
+                    }}
+                    placeholder="New title, e.g. Delivery schedule"
+                    className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={addTitle}
+                    disabled={!newTitle.trim()}
+                    className="rounded-md bg-navy px-3 py-1 font-medium text-white disabled:opacity-40"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="mt-2 flex justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => saveTitles(DEFAULT_TITLES)}
+                    className="text-slate-500 hover:underline"
+                  >
+                    Restore the original four
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditTitles(false)}
+                    className="font-medium text-navy hover:underline"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <label className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700">
             <input
               type="checkbox"
