@@ -11,11 +11,6 @@ export type LLine = {
   weight: number | null;
   qty: number | null;
   ext_price?: number | null; // Titan ExtPrice for the line
-  load_no?: string | null; // Titan Load (the real truck)
-  qty_pro?: number | null; // produced
-  qty_shp?: number | null; // shipped
-  ship_date?: string | null;
-  unit_yards?: number | null;
 };
 
 export type ManualItem = {
@@ -46,12 +41,6 @@ export type LItem = {
   weight: number; // total lb
   cost: number; // total $ (typed cost, else the Titan prices added up)
   titanCost: number; // total $ from Titan ExtPrice
-  yards: number; // total Unit Yards from Titan
-  nLines: number; // lines that count (quantity above zero)
-  shippedLines: number; // lines Titan shows as shipped
-  producedLines: number; // lines Titan shows as produced
-  shipDate: string | null; // latest ship date
-  loadNos: string[]; // Titan load numbers its lines are on
   ready: string | null;
   pick: string | null;
   manual: boolean;
@@ -63,7 +52,6 @@ export type Day = {
   items: LItem[];
   weight: number;
   cost: number;
-  yards: number;
   loads: Load[];
 };
 
@@ -91,30 +79,11 @@ export function buildItems(
       weight: 0,
       cost: 0,
       titanCost: 0,
-      yards: 0,
-      nLines: 0,
-      shippedLines: 0,
-      producedLines: 0,
-      shipDate: null,
-      loadNos: [],
       ready: null,
       pick: null,
       manual: false,
     };
     it.weight += w;
-    it.yards += Number(l.unit_yards) || 0;
-    if (l.qty === null || l.qty === undefined || Number(l.qty) > 0) {
-      it.nLines++;
-      const q = Number(l.qty) || 0;
-      if (Number(l.qty_shp) > 0 && (q === 0 || Number(l.qty_shp) >= q))
-        it.shippedLines++;
-      if (Number(l.qty_pro) > 0 && (q === 0 || Number(l.qty_pro) >= q))
-        it.producedLines++;
-    }
-    if (l.ship_date && (!it.shipDate || l.ship_date > it.shipDate))
-      it.shipDate = l.ship_date;
-    const ln = (l.load_no ?? "").trim();
-    if (ln && !it.loadNos.includes(ln)) it.loadNos.push(ln);
     it.titanCost += Number(l.ext_price) || 0;
     // Ready only when every line is ready: use the latest Ready Date.
     if (l.ready_date && (!it.ready || l.ready_date > it.ready))
@@ -136,12 +105,6 @@ export function buildItems(
       weight: (Number(m.weight) || 0) * (Number(m.qty) || 1),
       cost: (Number(m.cost) || 0) * (Number(m.qty) || 1),
       titanCost: 0,
-      yards: 0,
-      nLines: 0,
-      shippedLines: 0,
-      producedLines: 0,
-      shipDate: null,
-      loadNos: [],
       ready: null,
       pick: m.pick || null,
       manual: true,
@@ -171,9 +134,6 @@ export type Report = {
   total: number;
   totalWeight: number;
   totalCost: number;
-  shipped: LItem[]; // every line shipped (per Titan)
-  partlyShipped: LItem[]; // some lines shipped, not all
-  totalYards: number;
   picked: LItem[]; // pick date already passed
   scheduled: LItem[]; // pick date today or later
   yard: (LItem & { waiting: number })[]; // ready, no pick date
@@ -199,10 +159,8 @@ export function buildReport(
   const scheduled: LItem[] = [];
   const yard: (LItem & { waiting: number })[] = [];
   const notReady: LItem[] = [];
-  const shipped: LItem[] = [];
   for (const it of items) {
-    if (it.nLines > 0 && it.shippedLines >= it.nLines) shipped.push(it);
-    else if (it.pick) (it.pick < today ? picked : scheduled).push(it);
+    if (it.pick) (it.pick < today ? picked : scheduled).push(it);
     else if (it.ready && it.ready <= today)
       yard.push({ ...it, waiting: daysBetween(it.ready, today) });
     else notReady.push(it);
@@ -219,7 +177,6 @@ export function buildReport(
       items: its.sort((a, b) => natural(a.name, b.name)),
       weight: its.reduce((n, i) => n + i.weight, 0),
       cost: its.reduce((n, i) => n + i.cost, 0),
-      yards: its.reduce((n, i) => n + i.yards, 0),
       loads: packLoads(its, limit),
     }));
 
@@ -227,11 +184,6 @@ export function buildReport(
     total: items.length,
     totalWeight: items.reduce((n, i) => n + i.weight, 0),
     totalCost: items.reduce((n, i) => n + i.cost, 0),
-    totalYards: items.reduce((n, i) => n + i.yards, 0),
-    shipped,
-    partlyShipped: items.filter(
-      (i) => i.shippedLines > 0 && i.shippedLines < i.nLines,
-    ),
     picked,
     scheduled,
     yard,
@@ -247,61 +199,3 @@ export const sumW = (xs: { weight: number }[]) =>
 
 export const sumC = (xs: { cost: number }[]) =>
   xs.reduce((n, i) => n + i.cost, 0);
-
-export type TitanLoad = {
-  loadNo: string;
-  pick: string | null; // earliest pick date on the load
-  structures: { name: string; weight: number; lines: number }[];
-  weight: number;
-  yards: number;
-  cost: number; // Titan ExtPrice added up
-  shipped: boolean; // every line on the load shows a ship quantity
-  over: boolean;
-};
-
-/** The real trucks: one entry per Titan Load number, with what is on it. */
-export function buildTitanLoads(lines: LLine[], limit: number): TitanLoad[] {
-  const by = new Map<string, TitanLoad & { shp: number; n: number }>();
-  for (const l of lines) {
-    const no = (l.load_no ?? "").trim();
-    if (!no) continue;
-    const ld = by.get(no) ?? {
-      loadNo: no,
-      pick: null,
-      structures: [],
-      weight: 0,
-      yards: 0,
-      cost: 0,
-      shipped: false,
-      over: false,
-      shp: 0,
-      n: 0,
-    };
-    const w = Number(l.weight) || 0;
-    ld.weight += w;
-    ld.yards += Number(l.unit_yards) || 0;
-    ld.cost += Number(l.ext_price) || 0;
-    ld.n++;
-    if (Number(l.qty_shp) > 0) ld.shp++;
-    if (l.pick_date && (!ld.pick || l.pick_date < ld.pick))
-      ld.pick = l.pick_date;
-    const st = ld.structures.find((x) => x.name === l.structure);
-    if (st) {
-      st.weight += w;
-      st.lines++;
-    } else ld.structures.push({ name: l.structure, weight: w, lines: 1 });
-    by.set(no, ld);
-  }
-  return [...by.values()]
-    .map(({ shp, n, ...ld }) => ({
-      ...ld,
-      structures: ld.structures.sort((a, b) => natural(a.name, b.name)),
-      shipped: n > 0 && shp >= n,
-      over: ld.weight > limit,
-    }))
-    .sort(
-      (a, b) =>
-        (a.pick ?? "9999").localeCompare(b.pick ?? "9999") ||
-        natural(a.loadNo, b.loadNo),
-    );
-}
