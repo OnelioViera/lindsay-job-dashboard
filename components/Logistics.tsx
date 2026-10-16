@@ -78,6 +78,18 @@ export default function Logistics() {
       return next;
     });
   const skip = (k: string) => (noPrint.has(k) ? "print:hidden" : "");
+  const [emptyNote, setEmptyNote] = useState("");
+  useEffect(() => {
+    try {
+      setEmptyNote(localStorage.getItem(`logistics-empty-note:${jobId}`) ?? "");
+    } catch {}
+  }, [jobId]);
+  const changeEmptyNote = (v: string) => {
+    setEmptyNote(v);
+    try {
+      localStorage.setItem(`logistics-empty-note:${jobId}`, v);
+    } catch {}
+  };
   const [showNotReady, setShowNotReady] = useState(true);
   useEffect(() => {
     try {
@@ -354,6 +366,16 @@ export default function Logistics() {
               List the structures that are not ready yet (screen and printout)
             </label>
 
+            <label className="mt-4 block text-sm font-semibold text-navy">
+              Note to show when nothing is scheduled for delivery
+              <input
+                value={emptyNote}
+                onChange={(e) => changeEmptyNote(e.target.value)}
+                placeholder="Nothing is scheduled for delivery from today on."
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal text-slate-800"
+              />
+            </label>
+
             <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
               Add a delivery by hand
             </h2>
@@ -604,7 +626,8 @@ export default function Logistics() {
                   <h3 className={heading}>Delivery schedule by day</h3>
                   {r.days.length === 0 ? (
                     <p className="mb-5 text-sm text-slate-600">
-                      Nothing is scheduled for delivery from today on.
+                      {emptyNote.trim() ||
+                        "Nothing is scheduled for delivery from today on."}
                     </p>
                   ) : (
                     <table className="mb-5 w-full border-collapse text-sm">
