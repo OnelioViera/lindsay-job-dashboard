@@ -79,6 +79,19 @@ export default function Logistics() {
       return next;
     });
   const skip = (k: string) => (noPrint.has(k) ? "print:hidden" : "");
+  const [showNotReady, setShowNotReady] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("logistics-show-notready") === "0")
+        setShowNotReady(false);
+    } catch {}
+  }, []);
+  const changeShowNotReady = (v: boolean) => {
+    setShowNotReady(v);
+    try {
+      localStorage.setItem("logistics-show-notready", v ? "1" : "0");
+    } catch {}
+  };
   const PRINT_SECTIONS: [string, string][] = [
     ["sum", "Delivery summary"],
     ["day", "Delivery schedule by day"],
@@ -334,6 +347,14 @@ export default function Logistics() {
                 </label>
               ))}
             </div>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showNotReady}
+                onChange={(e) => changeShowNotReady(e.target.checked)}
+              />
+              Show structures that are not ready yet (screen and printout)
+            </label>
 
             <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
               Add a delivery by hand
@@ -529,7 +550,9 @@ export default function Logistics() {
                         ["Already picked (pick date passed)", r.picked],
                         ["Scheduled for delivery", r.scheduled],
                         ["Ready, no pick date (in the yard)", r.yard],
-                        ["Not ready yet", r.notReady],
+                        ...(showNotReady
+                          ? [["Not ready yet", r.notReady]]
+                          : []),
                       ].map(([label, xs]) => (
                         <tr
                           key={label as string}
@@ -550,17 +573,29 @@ export default function Logistics() {
                         </tr>
                       ))}
                       <tr className="font-bold">
-                        <td className={td}>Whole job</td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {r.total}
+                        <td className={td}>
+                          {showNotReady
+                            ? "Whole job"
+                            : "Total (not-ready structures left out)"}
                         </td>
                         <td className={`${td} text-right tabular-nums`}>
-                          {lb(r.totalWeight)}
+                          {showNotReady ? r.total : r.total - r.notReady.length}
+                        </td>
+                        <td className={`${td} text-right tabular-nums`}>
+                          {lb(
+                            showNotReady
+                              ? r.totalWeight
+                              : r.totalWeight - sumW(r.notReady),
+                          )}
                         </td>
                         <td
                           className={`${td} text-right tabular-nums ${skip("cost")}`}
                         >
-                          {money(r.totalCost)}
+                          {money(
+                            showNotReady
+                              ? r.totalCost
+                              : r.totalCost - sumC(r.notReady),
+                          )}
                         </td>
                       </tr>
                     </tbody>
