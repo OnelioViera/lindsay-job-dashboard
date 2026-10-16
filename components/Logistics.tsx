@@ -278,7 +278,7 @@ export default function Logistics() {
             href={withJob("/structures", jobId)}
             className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-white"
           >
-            Structure Tracker
+            ← Back to job
           </Link>
           <button
             onClick={() => window.print()}
