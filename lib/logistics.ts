@@ -6,6 +6,7 @@ export const DEFAULT_LIMIT = 55000; // lb per truckload
 export type LLine = {
   structure: string;
   description: string | null;
+  sch_date?: string | null;
   ready_date: string | null;
   pick_date: string | null;
   weight: number | null;
@@ -41,6 +42,7 @@ export type LItem = {
   weight: number; // total lb
   cost: number; // total $ (typed cost, else the Titan prices added up)
   titanCost: number; // total $ from Titan ExtPrice
+  sch: string | null;
   ready: string | null;
   pick: string | null;
   manual: boolean;
@@ -79,12 +81,14 @@ export function buildItems(
       weight: 0,
       cost: 0,
       titanCost: 0,
+      sch: null,
       ready: null,
       pick: null,
       manual: false,
     };
     it.weight += w;
     it.titanCost += Number(l.ext_price) || 0;
+    if (l.sch_date && (!it.sch || l.sch_date > it.sch)) it.sch = l.sch_date;
     // Ready only when every line is ready: use the latest Ready Date.
     if (l.ready_date && (!it.ready || l.ready_date > it.ready))
       it.ready = l.ready_date;
@@ -105,6 +109,7 @@ export function buildItems(
       weight: (Number(m.weight) || 0) * (Number(m.qty) || 1),
       cost: (Number(m.cost) || 0) * (Number(m.qty) || 1),
       titanCost: 0,
+      sch: null,
       ready: null,
       pick: m.pick || null,
       manual: true,

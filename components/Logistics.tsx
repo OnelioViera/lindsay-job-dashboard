@@ -90,6 +90,26 @@ export default function Logistics() {
       localStorage.setItem(`logistics-empty-note:${jobId}`, v);
     } catch {}
   };
+  const [nrCols, setNrCols] = useState<Set<string>>(new Set(["sch", "ready"]));
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("logistics-notready-cols");
+      if (v) setNrCols(new Set(JSON.parse(v)));
+    } catch {}
+  }, []);
+  const toggleNrCol = (k: string) =>
+    setNrCols((cur) => {
+      const next = new Set(cur);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      try {
+        localStorage.setItem(
+          "logistics-notready-cols",
+          JSON.stringify([...next]),
+        );
+      } catch {}
+      return next;
+    });
   const [showNotReady, setShowNotReady] = useState(true);
   useEffect(() => {
     try {
@@ -128,7 +148,7 @@ export default function Logistics() {
       const { data, error: e } = await supabase
         .from("titan_lines")
         .select(
-          "structure, description, ready_date, pick_date, weight, qty" +
+          "structure, description, sch_date, ready_date, pick_date, weight, qty" +
             (withPrice ? ", ext_price" : ""),
         )
         .eq("job_id", jobId)
@@ -365,6 +385,26 @@ export default function Logistics() {
               />
               List the structures that are not ready yet (screen and printout)
             </label>
+
+            {showNotReady && (
+              <div className="mt-1 ml-6 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                <span className="text-slate-600">Show dates:</span>
+                {[
+                  ["sch", "Scheduled date"],
+                  ["ready", "Ready date"],
+                  ["pick", "Pick date"],
+                ].map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={nrCols.has(k)}
+                      onChange={() => toggleNrCol(k)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )}
 
             <label className="mt-4 block text-sm font-semibold text-navy">
               Note to show when nothing is scheduled for delivery
@@ -740,6 +780,15 @@ export default function Logistics() {
                           <tr className="border-b border-slate-400 text-left">
                             <th className={th}>Structure</th>
                             <th className={th}>Description</th>
+                            {nrCols.has("sch") && (
+                              <th className={th}>Scheduled date</th>
+                            )}
+                            {nrCols.has("ready") && (
+                              <th className={th}>Ready date</th>
+                            )}
+                            {nrCols.has("pick") && (
+                              <th className={th}>Pick date</th>
+                            )}
                             <th className={`${th} text-right`}>Weight</th>
                             <th className={`${th} text-right ${skip("cost")}`}>
                               Cost
@@ -754,6 +803,15 @@ export default function Logistics() {
                             >
                               <td className={`${td} font-medium`}>{i.name}</td>
                               <td className={td}>{i.description}</td>
+                              {nrCols.has("sch") && (
+                                <td className={td}>{us(i.sch)}</td>
+                              )}
+                              {nrCols.has("ready") && (
+                                <td className={td}>{us(i.ready)}</td>
+                              )}
+                              {nrCols.has("pick") && (
+                                <td className={td}>{us(i.pick)}</td>
+                              )}
                               <td className={`${td} text-right tabular-nums`}>
                                 {lb(i.weight)}
                               </td>
