@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserBadge from "@/components/UserBadge";
-import BackButton from "./BackButton";
 import { getSupabase } from "@/lib/supabase";
 import { FILTERS, type FilterKey, type Row } from "@/lib/types";
 import Link from "next/link";
@@ -855,7 +854,6 @@ export default function Tracker() {
           </p>
         </div>
         <div className="flex gap-2">
-          <BackButton />
           <Link
             href="/"
             className="rounded-md border border-slate-300 px-4 py-2 text-sm hover:bg-white"
@@ -908,6 +906,12 @@ export default function Tracker() {
             className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy hover:bg-white"
           >
             Procurement order
+          </Link>
+          <Link
+            href={withJob("/logistics", job?.id)}
+            className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy hover:bg-white"
+          >
+            Logistics
           </Link>
           <button
             onClick={() => window.print()}

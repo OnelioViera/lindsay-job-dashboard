@@ -7,7 +7,6 @@ import { getSupabase } from "@/lib/supabase";
 import { CATALOG } from "@/lib/catalog";
 import JobBanner from "./JobBanner";
 import UserBadge from "@/components/UserBadge";
-import BackButton from "./BackButton";
 import RecipePanel from "./RecipePanel";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
 
@@ -535,7 +534,6 @@ export default function Procurement() {
           </p>
         </div>
         <div className="flex gap-2">
-          <BackButton />
           <UserBadge />
           <Link
             href="/"

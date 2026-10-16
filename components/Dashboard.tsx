@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { rememberJob, withJob, type Job } from "@/lib/jobs";
 import UserBadge from "@/components/UserBadge";
-import BackButton from "./BackButton";
 import {
   analyze,
   fmtShort,
@@ -765,7 +764,6 @@ export default function Dashboard() {
               Order.
             </p>
           </div>
-          <BackButton />
           <UserBadge />
           <button
             onClick={() => void getSupabase().auth.signOut()}

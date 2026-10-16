@@ -24,7 +24,6 @@ import {
   type ManualItem,
 } from "@/lib/logistics";
 import { hasExtPrice } from "@/lib/priceColumn";
-import BackButton from "./BackButton";
 import UserBadge from "./UserBadge";
 
 const lb = (n: number) => `${Math.round(n).toLocaleString("en-US")} lb`;
@@ -268,7 +267,6 @@ export default function Logistics() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <BackButton />
           <UserBadge />
           <Link
             href="/"
