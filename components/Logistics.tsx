@@ -353,7 +353,7 @@ export default function Logistics() {
                 checked={showNotReady}
                 onChange={(e) => changeShowNotReady(e.target.checked)}
               />
-              Show structures that are not ready yet (screen and printout)
+              List the structures that are not ready yet (screen and printout)
             </label>
 
             <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
@@ -705,6 +705,49 @@ export default function Logistics() {
                     </table>
                   )}
                 </div>
+                {/* Not ready yet list */}
+                {showNotReady && (
+                  <div>
+                    <h3 className={heading}>
+                      Not ready yet ({r.notReady.length})
+                    </h3>
+                    {r.notReady.length === 0 ? (
+                      <p className="mb-5 text-sm text-slate-600">None.</p>
+                    ) : (
+                      <table className="mb-5 w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-400 text-left">
+                            <th className={th}>Structure</th>
+                            <th className={th}>Description</th>
+                            <th className={`${th} text-right`}>Weight</th>
+                            <th className={`${th} text-right ${skip("cost")}`}>
+                              Cost
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {r.notReady.map((i) => (
+                            <tr
+                              key={i.key}
+                              className="border-b border-slate-200"
+                            >
+                              <td className={`${td} font-medium`}>{i.name}</td>
+                              <td className={td}>{i.description}</td>
+                              <td className={`${td} text-right tabular-nums`}>
+                                {lb(i.weight)}
+                              </td>
+                              <td
+                                className={`${td} text-right tabular-nums ${skip("cost")}`}
+                              >
+                                {money(i.cost)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
                 {/* 4. Yard and risk list */}
                 <div className={skip("yard")}>
                   <h3 className={heading}>Yard and risk list</h3>
