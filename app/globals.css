@@ -17,7 +17,9 @@ body {
 
 @page {
   size: letter portrait;
-  margin: 0.4in;
+  /* Zero page margin stops the browser printing its own URL/date header and
+     footer; the 0.4in margin is recreated as padding below. */
+  margin: 0;
 }
 
 @media print {
@@ -30,6 +32,11 @@ body {
   html,
   body {
     background: #fff !important;
+  }
+  body {
+    padding: 0.4in !important;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
   * {
     -webkit-print-color-adjust: exact;
