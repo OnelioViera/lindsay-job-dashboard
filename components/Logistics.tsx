@@ -770,7 +770,7 @@ export default function Logistics() {
                             {plantTotals(d.items).map(([pl, c], k, all) => (
                               <tr
                                 key={pl}
-                                className={`bg-slate-50 text-sm font-semibold ${
+                                className={`bg-sky-50 text-sm font-semibold ${
                                   k === all.length - 1
                                     ? "border-b-2 border-slate-300"
                                     : ""
@@ -778,7 +778,7 @@ export default function Logistics() {
                               >
                                 <td
                                   colSpan={3}
-                                  className={`${td} pr-3 text-right text-navy`}
+                                  className={`${td} border-l-4 border-navy pr-3 text-right text-navy`}
                                 >
                                   {k === 0
                                     ? "Invoiced by plant for this day — "
@@ -788,7 +788,7 @@ export default function Logistics() {
                                 <td className={`${td} text-right tabular-nums`}>
                                   {money(c)}
                                 </td>
-                                <td className={td}></td>
+                                <td className={`${td} ${skip("trucks")}`}></td>
                               </tr>
                             ))}
                           </Fragment>
@@ -833,7 +833,7 @@ export default function Logistics() {
                                 <td className={`${td} text-right tabular-nums`}>
                                   {money(c)}
                                 </td>
-                                <td className={td}></td>
+                                <td className={`${td} ${skip("trucks")}`}></td>
                               </tr>
                             ))}
                           </>
