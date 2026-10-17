@@ -1730,7 +1730,19 @@ export default function Tracker() {
                         value={r.plant_id ?? ""}
                         onChange={(e) =>
                           void setPlant(
-                            isHeader ? g.lines.map((l) => l.id) : [r.id],
+                            isHeader
+                              ? g.lines
+                                  // "FPC-DAC/A" on a structure must not wipe the
+                                  // per-line FPC-DAC / FPC-A that came from Titan:
+                                  // Logistics needs it to split cost by plant.
+                                  .filter(
+                                    (l) =>
+                                      e.target.value !== "FPC-DAC/A" ||
+                                      (l.plant_id !== "FPC-DAC" &&
+                                        l.plant_id !== "FPC-A"),
+                                  )
+                                  .map((l) => l.id)
+                              : [r.id],
                             e.target.value || null,
                           )
                         }
