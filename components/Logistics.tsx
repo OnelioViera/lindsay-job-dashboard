@@ -781,7 +781,7 @@ export default function Logistics() {
                                   className={`${td} pr-3 text-right text-navy`}
                                 >
                                   {k === 0
-                                    ? "Cost by plant for this day — "
+                                    ? "Invoiced by plant for this day — "
                                     : ""}
                                   {pl}
                                 </td>
@@ -818,7 +818,8 @@ export default function Logistics() {
                               className={`bg-navy text-white ${skip("cost")}`}
                             >
                               <td colSpan={5} className={`${td} font-bold`}>
-                                Total cost by plant (all scheduled deliveries)
+                                Total invoiced by plant (all scheduled
+                                deliveries)
                               </td>
                             </tr>
                             {plantTotals(r.scheduled).map(([pl, c]) => (
