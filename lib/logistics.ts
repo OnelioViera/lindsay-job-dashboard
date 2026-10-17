@@ -112,15 +112,13 @@ export function buildItems(
     const tt = ps.reduce((a, x) => a + x.titan, 0);
     const tw = ps.reduce((a, x) => a + x.weight, 0);
     for (const x of ps) {
-      const share =
-        ps.length === 1
-          ? 1
-          : tt > 0
-            ? x.titan / tt
-            : tw > 0
-              ? x.weight / tw
-              : 1 / ps.length;
-      x.cost = it.cost * share;
+      // Titan's ExtPrice added up for each plant; only when Titan has no prices
+      // does a typed cost get spread by weight.
+      x.cost =
+        tt > 0
+          ? x.titan
+          : it.cost *
+            (ps.length === 1 ? 1 : tw > 0 ? x.weight / tw : 1 / ps.length);
     }
   }
   for (const m of manual) {
