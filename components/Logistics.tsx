@@ -32,6 +32,13 @@ const us = (d: string | null) => {
   const [y, m, day] = d.split("-");
   return `${m}/${day}/${y}`;
 };
+const plantTotals = (items: { plants: Record<string, { cost: number }> }[]) => {
+  const t: Record<string, number> = {};
+  for (const it of items)
+    for (const [pl, v] of Object.entries(it.plants))
+      t[pl] = (t[pl] ?? 0) + v.cost;
+  return Object.entries(t).sort(([a], [b]) => a.localeCompare(b));
+};
 const dow = (d: string) =>
   new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" });
 const n = (x: number, one: string, many = `${one}s`) =>
@@ -757,6 +764,24 @@ export default function Logistics() {
                                 </td>
                               </tr>
                             ))}
+                            {plantTotals(d.items).length > 0 && (
+                              <tr
+                                className={`border-b border-slate-300 text-xs font-semibold ${skip("cost")}`}
+                              >
+                                <td
+                                  colSpan={5}
+                                  className={`${td} pl-6 text-right`}
+                                >
+                                  Plant totals for this day:{" "}
+                                  {plantTotals(d.items).map(([pl, c], k) => (
+                                    <span key={pl}>
+                                      {k > 0 && " · "}
+                                      {pl} {money(c)}
+                                    </span>
+                                  ))}
+                                </td>
+                              </tr>
+                            )}
                           </Fragment>
                         ))}
                         <tr className="font-bold">
@@ -778,6 +803,19 @@ export default function Logistics() {
                             {totalLoads}
                           </td>
                         </tr>
+                        {plantTotals(r.scheduled).length > 0 && (
+                          <tr className={`font-bold ${skip("cost")}`}>
+                            <td colSpan={5} className={`${td} text-right`}>
+                              Plant totals:{" "}
+                              {plantTotals(r.scheduled).map(([pl, c], k) => (
+                                <span key={pl}>
+                                  {k > 0 && " · "}
+                                  {pl} {money(c)}
+                                </span>
+                              ))}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   )}
