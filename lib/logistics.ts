@@ -6,6 +6,7 @@ export const DEFAULT_LIMIT = 55000; // lb per truckload
 export type LLine = {
   structure: string;
   description: string | null;
+  plant_id?: string | null;
   sch_date?: string | null;
   ready_date: string | null;
   pick_date: string | null;
@@ -46,6 +47,7 @@ export type LItem = {
   ready: string | null;
   pick: string | null;
   manual: boolean;
+  plants: Record<string, { weight: number; titan: number; cost: number }>;
 };
 
 export type Load = { items: LItem[]; weight: number; over: boolean };
@@ -85,8 +87,13 @@ export function buildItems(
       ready: null,
       pick: null,
       manual: false,
+      plants: {},
     };
     it.weight += w;
+    const pl = (l.plant_id ?? "").trim() || "No plant";
+    const pe = (it.plants[pl] ??= { weight: 0, titan: 0, cost: 0 });
+    pe.weight += w;
+    pe.titan += Number(l.ext_price) || 0;
     it.titanCost += Number(l.ext_price) || 0;
     if (l.sch_date && (!it.sch || l.sch_date > it.sch)) it.sch = l.sch_date;
     // Ready only when every line is ready: use the latest Ready Date.
@@ -100,6 +107,21 @@ export function buildItems(
   for (const it of items) {
     const typed = (costs[it.key] ?? "").trim();
     it.cost = typed !== "" ? parseCost(typed) : it.titanCost;
+    // Split the structure's cost between plants: by Titan price, else by weight.
+    const ps = Object.values(it.plants);
+    const tt = ps.reduce((a, x) => a + x.titan, 0);
+    const tw = ps.reduce((a, x) => a + x.weight, 0);
+    for (const x of ps) {
+      const share =
+        ps.length === 1
+          ? 1
+          : tt > 0
+            ? x.titan / tt
+            : tw > 0
+              ? x.weight / tw
+              : 1 / ps.length;
+      x.cost = it.cost * share;
+    }
   }
   for (const m of manual) {
     items.push({
@@ -113,6 +135,7 @@ export function buildItems(
       ready: null,
       pick: m.pick || null,
       manual: true,
+      plants: {},
     });
   }
   return items.sort((a, b) => natural(a.name, b.name));

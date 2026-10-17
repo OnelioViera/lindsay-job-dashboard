@@ -148,7 +148,7 @@ export default function Logistics() {
       const { data, error: e } = await supabase
         .from("titan_lines")
         .select(
-          "structure, description, sch_date, ready_date, pick_date, weight, qty" +
+          "structure, description, plant_id, sch_date, ready_date, pick_date, weight, qty" +
             (withPrice ? ", ext_price" : ""),
         )
         .eq("job_id", jobId)
@@ -721,6 +721,22 @@ export default function Logistics() {
                                 <td className={`${td} pl-6`}>
                                   <span className="font-medium">{it.name}</span>
                                   {it.description ? ` — ${it.description}` : ""}
+                                  {Object.entries(it.plants).length > 0 && (
+                                    <div className="mt-0.5 text-[11px] text-slate-600">
+                                      {Object.entries(it.plants).map(
+                                        ([pl, v], k) => (
+                                          <span key={pl}>
+                                            {k > 0 && " · "}
+                                            <strong>{pl}</strong>
+                                            <span className={skip("cost")}>
+                                              {" "}
+                                              {money(v.cost)}
+                                            </span>
+                                          </span>
+                                        ),
+                                      )}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className={td}></td>
                                 <td className={`${td} text-right tabular-nums`}>
