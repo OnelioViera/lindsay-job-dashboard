@@ -37,7 +37,10 @@ const plantTotals = (items: { plants: Record<string, { cost: number }> }[]) => {
   for (const it of items)
     for (const [pl, v] of Object.entries(it.plants))
       t[pl] = (t[pl] ?? 0) + v.cost;
-  return Object.entries(t).sort(([a], [b]) => a.localeCompare(b));
+  const rank = (x: string) => (x === "FPC-DAC" ? 0 : x === "FPC-A" ? 1 : 2);
+  return Object.entries(t).sort(
+    ([a], [b]) => rank(a) - rank(b) || a.localeCompare(b),
+  );
 };
 const dow = (d: string) =>
   new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { weekday: "short" });
@@ -764,24 +767,30 @@ export default function Logistics() {
                                 </td>
                               </tr>
                             ))}
-                            {plantTotals(d.items).length > 0 && (
+                            {plantTotals(d.items).map(([pl, c], k, all) => (
                               <tr
-                                className={`border-b border-slate-300 text-xs font-semibold ${skip("cost")}`}
+                                key={pl}
+                                className={`bg-slate-50 text-sm font-semibold ${
+                                  k === all.length - 1
+                                    ? "border-b-2 border-slate-300"
+                                    : ""
+                                } ${skip("cost")}`}
                               >
                                 <td
-                                  colSpan={5}
-                                  className={`${td} pl-6 text-right`}
+                                  colSpan={3}
+                                  className={`${td} pr-3 text-right text-navy`}
                                 >
-                                  Plant totals for this day:{" "}
-                                  {plantTotals(d.items).map(([pl, c], k) => (
-                                    <span key={pl}>
-                                      {k > 0 && " · "}
-                                      {pl} {money(c)}
-                                    </span>
-                                  ))}
+                                  {k === 0
+                                    ? "Cost by plant for this day — "
+                                    : ""}
+                                  {pl}
                                 </td>
+                                <td className={`${td} text-right tabular-nums`}>
+                                  {money(c)}
+                                </td>
+                                <td className={td}></td>
                               </tr>
-                            )}
+                            ))}
                           </Fragment>
                         ))}
                         <tr className="font-bold">
@@ -804,17 +813,29 @@ export default function Logistics() {
                           </td>
                         </tr>
                         {plantTotals(r.scheduled).length > 0 && (
-                          <tr className={`font-bold ${skip("cost")}`}>
-                            <td colSpan={5} className={`${td} text-right`}>
-                              Plant totals:{" "}
-                              {plantTotals(r.scheduled).map(([pl, c], k) => (
-                                <span key={pl}>
-                                  {k > 0 && " · "}
-                                  {pl} {money(c)}
-                                </span>
-                              ))}
-                            </td>
-                          </tr>
+                          <>
+                            <tr
+                              className={`bg-navy text-white ${skip("cost")}`}
+                            >
+                              <td colSpan={5} className={`${td} font-bold`}>
+                                Total cost by plant (all scheduled deliveries)
+                              </td>
+                            </tr>
+                            {plantTotals(r.scheduled).map(([pl, c]) => (
+                              <tr
+                                key={pl}
+                                className={`border-b border-slate-300 text-base font-bold ${skip("cost")}`}
+                              >
+                                <td colSpan={3} className={`${td} text-right`}>
+                                  {pl}
+                                </td>
+                                <td className={`${td} text-right tabular-nums`}>
+                                  {money(c)}
+                                </td>
+                                <td className={td}></td>
+                              </tr>
+                            ))}
+                          </>
                         )}
                       </tbody>
                     </table>
