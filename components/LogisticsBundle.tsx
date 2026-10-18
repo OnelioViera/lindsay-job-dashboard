@@ -43,6 +43,59 @@ const plantTotals = (items: { plants: Record<string, { cost: number }> }[]) => {
   );
 };
 
+type Scope = { from: string; to: string } | null;
+const EPOCH = "0000-01-01";
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const PRESETS: [string, string][] = [
+  ["all", "All dates"],
+  ["today", "Today"],
+  ["week", "This week"],
+  ["lastweek", "Last week"],
+  ["month", "This month"],
+  ["lastmonth", "Last month"],
+  ["custom", "Pick dates…"],
+];
+function presetRange(k: string): Scope {
+  const n = new Date();
+  const day = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  const mon = new Date(day);
+  mon.setDate(day.getDate() - ((day.getDay() + 6) % 7)); // Monday
+  const add = (d: Date, x: number) => {
+    const r = new Date(d);
+    r.setDate(r.getDate() + x);
+    return r;
+  };
+  if (k === "today") return { from: iso(day), to: iso(day) };
+  if (k === "week") return { from: iso(mon), to: iso(add(mon, 6)) };
+  if (k === "lastweek")
+    return { from: iso(add(mon, -7)), to: iso(add(mon, -1)) };
+  if (k === "month")
+    return {
+      from: iso(new Date(n.getFullYear(), n.getMonth(), 1)),
+      to: iso(new Date(n.getFullYear(), n.getMonth() + 1, 0)),
+    };
+  if (k === "lastmonth")
+    return {
+      from: iso(new Date(n.getFullYear(), n.getMonth() - 1, 1)),
+      to: iso(new Date(n.getFullYear(), n.getMonth(), 0)),
+    };
+  return null;
+}
+
+/** The structures and report for one job under the chosen date range. */
+function prep(d: JobData, scope: Scope, includePast: boolean, today: string) {
+  let items = buildItems(d.lines, d.manual, d.costs);
+  if (scope)
+    items = items.filter(
+      (i) => i.pick && i.pick >= scope.from && i.pick <= scope.to,
+    );
+  // In a range (or when past deliveries are included) every dated delivery counts,
+  // even when its delivery date has already gone by.
+  const r = buildReport(items, d.limit, scope || includePast ? EPOCH : today);
+  return { items, r };
+}
+
 type JobData = {
   lines: LLine[];
   manual: ManualItem[];
@@ -140,36 +193,39 @@ function JobReport({
   data,
   o,
   today,
+  scope,
+  includePast,
 }: {
   job: Job;
   data: JobData;
   o: Opts;
   today: string;
+  scope: Scope;
+  includePast: boolean;
 }) {
-  const items = useMemo(
-    () => buildItems(data.lines, data.manual, data.costs),
-    [data],
-  );
-  const r = useMemo(
-    () => buildReport(items, data.limit, today),
-    [items, data.limit, today],
+  const { items, r } = useMemo(
+    () => prep(data, scope, includePast, today),
+    [data, scope, includePast, today],
   );
   const c = o.cost ? "" : "hidden";
   const t = o.trucks ? "" : "hidden";
-  const rows: [string, { weight: number; cost: number }[]][] = [
-    ["Already picked (pick date passed)", r.picked],
-    ["Scheduled for delivery", r.scheduled],
-    ["Ready, no pick date (in the yard)", r.yard],
-    ...(o.notReady
-      ? ([["Not ready yet", r.notReady]] as [
-          string,
-          { weight: number; cost: number }[],
-        ][])
-      : []),
-  ];
-  const shown = o.notReady
-    ? items
-    : items.filter((i) => !r.notReady.includes(i));
+  const rows: [string, { weight: number; cost: number }[]][] = scope
+    ? [["Deliveries in this date range", r.scheduled]]
+    : [
+        ["Already picked (pick date passed)", r.picked],
+        ["Scheduled for delivery", r.scheduled],
+        ["Ready, no pick date (in the yard)", r.yard],
+        ...(o.notReady
+          ? ([["Not ready yet", r.notReady]] as [
+              string,
+              { weight: number; cost: number }[],
+            ][])
+          : []),
+      ];
+  const shown =
+    scope || o.notReady ? items : items.filter((i) => !r.notReady.includes(i));
+  const showNotReady = o.notReady && !scope;
+  const showYard = o.yard && !scope;
   return (
     <section
       className={`rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none ${
@@ -194,6 +250,11 @@ function JobReport({
             })}
           </p>
           <p>Truckload limit {data.limit.toLocaleString("en-US")} lb</p>
+          {scope && (
+            <p className="font-semibold text-navy">
+              Deliveries {us(scope.from)} – {us(scope.to)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -232,9 +293,11 @@ function JobReport({
               ))}
               <tr className="font-bold">
                 <td className={td}>
-                  {o.notReady
-                    ? "Whole job"
-                    : "Total (not-ready structures left out)"}
+                  {scope
+                    ? "Total for this date range"
+                    : o.notReady
+                      ? "Whole job"
+                      : "Total (not-ready structures left out)"}
                 </td>
                 <td className={`${td} text-right tabular-nums`}>
                   {shown.length}
@@ -390,7 +453,7 @@ function JobReport({
         </>
       )}
 
-      {items.length > 0 && o.notReady && (
+      {items.length > 0 && showNotReady && (
         <>
           <h3 className={heading}>Not ready yet ({r.notReady.length})</h3>
           {r.notReady.length === 0 ? (
@@ -428,7 +491,7 @@ function JobReport({
         </>
       )}
 
-      {items.length > 0 && o.yard && (
+      {items.length > 0 && showYard && (
         <>
           <h3 className={heading}>Ready but no pick date ({r.yard.length})</h3>
           {r.yard.length === 0 ? (
@@ -477,6 +540,10 @@ export default function LogisticsBundle() {
   const [data, setData] = useState<Record<string, JobData>>({});
   const [busy, setBusy] = useState(false);
   const [o, setO] = useState<Opts>(DEFAULT_OPTS);
+  const [preset, setPreset] = useState("all");
+  const [cFrom, setCFrom] = useState("");
+  const [cTo, setCTo] = useState("");
+  const [includePast, setIncludePast] = useState(true);
 
   useEffect(() => {
     try {
@@ -545,18 +612,29 @@ export default function LogisticsBundle() {
   }, [picked, jobs, data]);
 
   const today = todayIso();
-  const overall = useMemo(() => {
-    const per = chosen
-      .filter((j) => data[j.id])
-      .map((j) => {
+  const scope: Scope = useMemo(() => {
+    if (preset === "all") return null;
+    if (preset === "custom")
+      return cFrom || cTo
+        ? { from: cFrom || "0000-01-01", to: cTo || "9999-12-31" }
+        : null;
+    return presetRange(preset);
+  }, [preset, cFrom, cTo]);
+  // With a date range, jobs with nothing delivered in it are left out.
+  const reportJobs = useMemo(
+    () =>
+      chosen.filter((j) => {
         const d = data[j.id];
-        const r = buildReport(
-          buildItems(d.lines, d.manual, d.costs),
-          d.limit,
-          today,
-        );
-        return { job: j, r };
-      });
+        if (!d) return false;
+        return !scope || prep(d, scope, includePast, today).items.length > 0;
+      }),
+    [chosen, data, scope, includePast, today],
+  );
+  const overall = useMemo(() => {
+    const per = reportJobs.map((j) => {
+      const { r } = prep(data[j.id], scope, includePast, today);
+      return { job: j, r };
+    });
     const plants: Record<string, number> = {};
     for (const { r } of per)
       for (const [pl, c] of plantTotals(r.scheduled))
@@ -567,7 +645,7 @@ export default function LogisticsBundle() {
         ([a], [b]) => rank(a) - rank(b) || a.localeCompare(b),
       ),
     };
-  }, [chosen, data, today]);
+  }, [reportJobs, data, scope, includePast, today]);
 
   const c = o.cost ? "" : "hidden";
 
@@ -675,6 +753,65 @@ export default function LogisticsBundle() {
           )}
 
           <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
+            Delivery dates to include
+          </h2>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {PRESETS.map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setPreset(k)}
+                className={`rounded-full border px-3 py-1 ${
+                  preset === k
+                    ? "border-navy bg-navy text-white"
+                    : "border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {preset === "custom" && (
+              <>
+                <label className="flex items-center gap-1">
+                  From
+                  <input
+                    type="date"
+                    value={cFrom}
+                    onChange={(e) => setCFrom(e.target.value)}
+                    className="rounded-md border border-slate-300 px-2 py-1"
+                  />
+                </label>
+                <label className="flex items-center gap-1">
+                  To
+                  <input
+                    type="date"
+                    value={cTo}
+                    onChange={(e) => setCTo(e.target.value)}
+                    className="rounded-md border border-slate-300 px-2 py-1"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+          {scope ? (
+            <p className="mt-2 text-xs text-slate-600">
+              Showing every structure with a pick (delivery) date from{" "}
+              {us(scope.from)} to {us(scope.to)}, including deliveries that have
+              already happened. Pick two months by choosing “Pick dates…” and
+              setting From and To. Jobs with nothing in the range are left out.
+            </p>
+          ) : (
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={includePast}
+                onChange={(e) => setIncludePast(e.target.checked)}
+              />
+              Include deliveries whose date has already passed (already picked)
+              in the schedule and totals
+            </label>
+          )}
+
+          <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
             What to print
           </h2>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
@@ -706,22 +843,21 @@ export default function LogisticsBundle() {
       </div>
 
       <div className="space-y-6 print:space-y-0">
-        {chosen.map(
-          (j) =>
-            data[j.id] && (
-              <JobReport
-                key={j.id}
-                job={j}
-                data={data[j.id]}
-                o={o}
-                today={today}
-              />
-            ),
-        )}
+        {reportJobs.map((j) => (
+          <JobReport
+            key={j.id}
+            job={j}
+            data={data[j.id]}
+            o={o}
+            today={today}
+            scope={scope}
+            includePast={includePast}
+          />
+        ))}
 
         {o.overall &&
-          chosen.length > 1 &&
-          overall.per.length === chosen.length && (
+          reportJobs.length > 1 &&
+          overall.per.length === reportJobs.length && (
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:break-before-page print:rounded-none print:border-0 print:p-0 print:shadow-none">
               <div className="mb-3 flex items-center gap-4 border-b-2 border-navy pb-3">
                 <img src="/logo.png" alt="" className="h-14 w-auto" />
@@ -730,7 +866,11 @@ export default function LogisticsBundle() {
                     Overall totals — scheduled deliveries
                   </h2>
                   <p className="text-sm">
-                    {chosen.length} jobs · printed{" "}
+                    {reportJobs.length} jobs
+                    {scope
+                      ? ` · deliveries ${us(scope.from)} – ${us(scope.to)}`
+                      : ""}{" "}
+                    · printed{" "}
                     {new Date().toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
