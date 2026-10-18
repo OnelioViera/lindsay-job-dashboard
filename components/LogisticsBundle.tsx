@@ -212,8 +212,15 @@ function JobReport({
   const rows: [string, { weight: number; cost: number }[]][] = scope
     ? [["Deliveries in this date range", r.scheduled]]
     : [
-        ["Already picked (pick date passed)", r.picked],
-        ["Scheduled for delivery", r.scheduled],
+        ...(includePast
+          ? ([["Picked or scheduled (all pick dates)", r.scheduled]] as [
+              string,
+              { weight: number; cost: number }[],
+            ][])
+          : ([
+              ["Already picked (pick date passed)", r.picked],
+              ["Scheduled for delivery", r.scheduled],
+            ] as [string, { weight: number; cost: number }[]][])),
         ["Ready, no pick date (in the yard)", r.yard],
         ...(o.notReady
           ? ([["Not ready yet", r.notReady]] as [
