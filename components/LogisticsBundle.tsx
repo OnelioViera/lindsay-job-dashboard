@@ -85,7 +85,7 @@ function presetRange(k: string): Scope {
 
 /** The structures and report for one job under the chosen date range. */
 function prep(d: JobData, scope: Scope, includePast: boolean, today: string) {
-  let items = buildItems(d.lines, d.manual, d.costs);
+  let items = buildItems(d.lines, d.manual, d.costs, true);
   if (scope)
     items = items.filter(
       (i) => i.pick && i.pick >= scope.from && i.pick <= scope.to,
@@ -360,37 +360,59 @@ function JobReport({
                       </td>
                     </tr>
                     {d.items.map((it) => (
-                      <tr
-                        key={it.key}
-                        className="border-b border-slate-200 text-xs"
-                      >
-                        <td className={`${td} pl-6`}>
-                          <span className="font-medium">{it.name}</span>
-                          {it.description ? ` — ${it.description}` : ""}
-                          {Object.keys(it.plants).length > 0 && (
-                            <div className="mt-0.5 text-[11px] text-slate-600">
-                              {Object.entries(it.plants).map(([pl, v], k) => (
-                                <span key={pl}>
-                                  {k > 0 && " · "}
-                                  <strong>{pl}</strong>
-                                  <span className={c}> {money(v.cost)}</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className={td}></td>
-                        <td className={`${td} text-right tabular-nums`}>
-                          {lb(it.weight)}
-                        </td>
-                        <td className={`${td} text-right tabular-nums ${c}`}>
-                          {it.cost ? money(it.cost) : ""}
-                        </td>
-                        <td className={`${td} text-right ${t}`}>
-                          Load{" "}
-                          {d.loads.findIndex((l) => l.items.includes(it)) + 1}
-                        </td>
-                      </tr>
+                      <Fragment key={it.key}>
+                        <tr className="border-b border-slate-200 text-xs">
+                          <td className={`${td} pl-6`}>
+                            <span className="font-medium">{it.name}</span>
+                            {it.description && it.pieces.length <= 1
+                              ? ` — ${it.description}`
+                              : ""}
+                            {Object.keys(it.plants).length > 0 && (
+                              <div className="mt-0.5 text-[11px] text-slate-600">
+                                {Object.entries(it.plants).map(([pl, v], k) => (
+                                  <span key={pl}>
+                                    {k > 0 && " · "}
+                                    <strong>{pl}</strong>
+                                    <span className={c}> {money(v.cost)}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className={td}></td>
+                          <td className={`${td} text-right tabular-nums`}>
+                            {lb(it.weight)}
+                          </td>
+                          <td className={`${td} text-right tabular-nums ${c}`}>
+                            {it.cost ? money(it.cost) : ""}
+                          </td>
+                          <td className={`${td} text-right ${t}`}>
+                            Load{" "}
+                            {d.loads.findIndex((l) => l.items.includes(it)) + 1}
+                          </td>
+                        </tr>
+                        {it.pieces.length > 1 &&
+                          it.pieces.map((pc, pi) => (
+                            <tr
+                              key={pi}
+                              className="border-b border-slate-100 text-[11px] text-slate-600"
+                            >
+                              <td className={`${td} pl-10`}>
+                                • {pc.description || "(part)"} — {pc.plant}
+                              </td>
+                              <td className={td}></td>
+                              <td className={`${td} text-right tabular-nums`}>
+                                {lb(pc.weight)}
+                              </td>
+                              <td
+                                className={`${td} text-right tabular-nums ${c}`}
+                              >
+                                {pc.cost ? money(pc.cost) : ""}
+                              </td>
+                              <td className={`${td} ${t}`}></td>
+                            </tr>
+                          ))}
+                      </Fragment>
                     ))}
                     {plantTotals(d.items).map(([pl, amt], k, all) => (
                       <tr

@@ -48,6 +48,14 @@ export type LItem = {
   pick: string | null;
   manual: boolean;
   plants: Record<string, { weight: number; titan: number; cost: number }>;
+  pieces: Piece[]; // the Tracker lines (parts) that make up this item
+};
+
+export type Piece = {
+  description: string;
+  plant: string;
+  weight: number;
+  cost: number;
 };
 
 export type Load = { items: LItem[]; weight: number; over: boolean };
@@ -67,17 +75,37 @@ export const todayIso = () => {
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true });
 
-/** One item per structure: weight is the sum of the Weight shown on each of its lines. */
+/**
+ * One item per structure: weight is the sum of the Weight shown on each of its lines.
+ * With `split`, a structure whose lines have different pick dates (or some with and some
+ * without) becomes one item per pick date, so only the parts that actually have a delivery
+ * date are scheduled and the rest stay in the yard / not-ready lists.
+ */
 export function buildItems(
   lines: LLine[],
   manual: ManualItem[],
   costs: Costs = {},
+  split = false,
 ): LItem[] {
   const by = new Map<string, LItem>();
+  const lineTitan = new Map<string, number>(); // per structure, for cost shares
+  const lineWeight = new Map<string, number>();
+  for (const l of lines) {
+    lineTitan.set(
+      l.structure,
+      (lineTitan.get(l.structure) ?? 0) + (Number(l.ext_price) || 0),
+    );
+    lineWeight.set(
+      l.structure,
+      (lineWeight.get(l.structure) ?? 0) + (Number(l.weight) || 0),
+    );
+  }
+  const pieceTitan = new Map<Piece, number>();
   for (const l of lines) {
     const w = Number(l.weight) || 0; // the Weight shown on each Tracker line
-    const it = by.get(l.structure) ?? {
-      key: l.structure,
+    const gk = split ? `${l.structure}\u0000${l.pick_date ?? ""}` : l.structure;
+    const it = by.get(gk) ?? {
+      key: split && l.pick_date ? `${l.structure}@${l.pick_date}` : l.structure,
       name: l.structure,
       description: l.description ?? "",
       weight: 0,
@@ -88,6 +116,7 @@ export function buildItems(
       pick: null,
       manual: false,
       plants: {},
+      pieces: [],
     };
     it.weight += w;
     const pl = (l.plant_id ?? "").trim() || "No plant";
@@ -95,18 +124,39 @@ export function buildItems(
     pe.weight += w;
     pe.titan += Number(l.ext_price) || 0;
     it.titanCost += Number(l.ext_price) || 0;
+    const piece: Piece = {
+      description: l.description ?? "",
+      plant: pl,
+      weight: w,
+      cost: 0,
+    };
+    pieceTitan.set(piece, Number(l.ext_price) || 0);
+    it.pieces.push(piece);
     if (l.sch_date && (!it.sch || l.sch_date > it.sch)) it.sch = l.sch_date;
     // Ready only when every line is ready: use the latest Ready Date.
     if (l.ready_date && (!it.ready || l.ready_date > it.ready))
       it.ready = l.ready_date;
     if (l.pick_date && (!it.pick || l.pick_date < it.pick))
       it.pick = l.pick_date;
-    by.set(l.structure, it);
+    by.set(gk, it);
   }
   const items = [...by.values()];
   for (const it of items) {
-    const typed = (costs[it.key] ?? "").trim();
-    it.cost = typed !== "" ? parseCost(typed) : it.titanCost;
+    const typed = (costs[it.name] ?? "").trim();
+    if (typed === "") it.cost = it.titanCost;
+    else {
+      // A cost typed for the whole structure is shared out by Titan price, else by weight.
+      const tt = lineTitan.get(it.name) ?? 0;
+      const tw = lineWeight.get(it.name) ?? 0;
+      const share = !split
+        ? 1
+        : tt > 0
+          ? it.titanCost / tt
+          : tw > 0
+            ? it.weight / tw
+            : 1;
+      it.cost = parseCost(typed) * share;
+    }
     // Split the structure's cost between plants: by Titan price, else by weight.
     const ps = Object.values(it.plants);
     const tt = ps.reduce((a, x) => a + x.titan, 0);
@@ -120,6 +170,14 @@ export function buildItems(
           : it.cost *
             (ps.length === 1 ? 1 : tw > 0 ? x.weight / tw : 1 / ps.length);
     }
+    // Each part's own cost: its Titan price, else its share of the item's cost by weight.
+    for (const pc of it.pieces)
+      pc.cost =
+        it.titanCost > 0
+          ? (pieceTitan.get(pc) ?? 0)
+          : it.weight > 0
+            ? it.cost * (pc.weight / it.weight)
+            : 0;
   }
   for (const m of manual) {
     items.push({
@@ -134,6 +192,7 @@ export function buildItems(
       pick: m.pick || null,
       manual: true,
       plants: {},
+      pieces: [],
     });
   }
   return items.sort((a, b) => natural(a.name, b.name));
@@ -207,7 +266,7 @@ export function buildReport(
     }));
 
   return {
-    total: items.length,
+    total: new Set(items.map((i) => i.name + (i.manual ? i.key : ""))).size,
     totalWeight: items.reduce((n, i) => n + i.weight, 0),
     totalCost: items.reduce((n, i) => n + i.cost, 0),
     picked,

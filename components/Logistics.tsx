@@ -267,9 +267,24 @@ export default function Logistics() {
     () => buildItems(lines, manual, costs),
     [lines, manual, costs],
   );
+  // The report works on parts: a structure whose base and riser ship on 10/19 but
+  // whose lid has no date yet is scheduled for the base and riser only.
+  const rItems = useMemo(
+    () => buildItems(lines, manual, costs, true),
+    [lines, manual, costs],
+  );
   const r = useMemo(
-    () => buildReport(items, limit, today),
-    [items, limit, today],
+    () => buildReport(rItems, limit, today),
+    [rItems, limit, today],
+  );
+  const shownCount = useMemo(
+    () =>
+      new Set(
+        rItems
+          .filter((i) => !r.notReady.includes(i))
+          .map((i) => i.name + (i.manual ? i.key : "")),
+      ).size,
+    [rItems, r],
   );
 
   const addManual = () => {
@@ -649,7 +664,7 @@ export default function Logistics() {
                             : "Total (not-ready structures left out)"}
                         </td>
                         <td className={`${td} text-right tabular-nums`}>
-                          {showNotReady ? r.total : r.total - r.notReady.length}
+                          {showNotReady ? r.total : shownCount}
                         </td>
                         <td className={`${td} text-right tabular-nums`}>
                           {lb(
@@ -724,48 +739,79 @@ export default function Logistics() {
                               </td>
                             </tr>
                             {d.items.map((it) => (
-                              <tr
-                                key={it.key}
-                                className="border-b border-slate-200 text-xs"
-                              >
-                                <td className={`${td} pl-6`}>
-                                  <span className="font-medium">{it.name}</span>
-                                  {it.description ? ` — ${it.description}` : ""}
-                                  {Object.entries(it.plants).length > 0 && (
-                                    <div className="mt-0.5 text-[11px] text-slate-600">
-                                      {Object.entries(it.plants).map(
-                                        ([pl, v], k) => (
-                                          <span key={pl}>
-                                            {k > 0 && " · "}
-                                            <strong>{pl}</strong>
-                                            <span className={skip("cost")}>
-                                              {" "}
-                                              {money(v.cost)}
+                              <Fragment key={it.key}>
+                                <tr className="border-b border-slate-200 text-xs">
+                                  <td className={`${td} pl-6`}>
+                                    <span className="font-medium">
+                                      {it.name}
+                                    </span>
+                                    {it.description && it.pieces.length <= 1
+                                      ? ` — ${it.description}`
+                                      : ""}
+                                    {Object.entries(it.plants).length > 0 && (
+                                      <div className="mt-0.5 text-[11px] text-slate-600">
+                                        {Object.entries(it.plants).map(
+                                          ([pl, v], k) => (
+                                            <span key={pl}>
+                                              {k > 0 && " · "}
+                                              <strong>{pl}</strong>
+                                              <span className={skip("cost")}>
+                                                {" "}
+                                                {money(v.cost)}
+                                              </span>
                                             </span>
-                                          </span>
-                                        ),
-                                      )}
-                                    </div>
-                                  )}
-                                </td>
-                                <td className={td}></td>
-                                <td className={`${td} text-right tabular-nums`}>
-                                  {lb(it.weight)}
-                                </td>
-                                <td
-                                  className={`${td} text-right tabular-nums ${skip("cost")}`}
-                                >
-                                  {it.cost ? money(it.cost) : ""}
-                                </td>
-                                <td
-                                  className={`${td} text-right ${skip("trucks")}`}
-                                >
-                                  Load{" "}
-                                  {d.loads.findIndex((l) =>
-                                    l.items.includes(it),
-                                  ) + 1}
-                                </td>
-                              </tr>
+                                          ),
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className={td}></td>
+                                  <td
+                                    className={`${td} text-right tabular-nums`}
+                                  >
+                                    {lb(it.weight)}
+                                  </td>
+                                  <td
+                                    className={`${td} text-right tabular-nums ${skip("cost")}`}
+                                  >
+                                    {it.cost ? money(it.cost) : ""}
+                                  </td>
+                                  <td
+                                    className={`${td} text-right ${skip("trucks")}`}
+                                  >
+                                    Load{" "}
+                                    {d.loads.findIndex((l) =>
+                                      l.items.includes(it),
+                                    ) + 1}
+                                  </td>
+                                </tr>
+                                {it.pieces.length > 1 &&
+                                  it.pieces.map((pc, pi) => (
+                                    <tr
+                                      key={pi}
+                                      className="border-b border-slate-100 text-[11px] text-slate-600"
+                                    >
+                                      <td className={`${td} pl-10`}>
+                                        • {pc.description || "(part)"} —{" "}
+                                        {pc.plant}
+                                      </td>
+                                      <td className={td}></td>
+                                      <td
+                                        className={`${td} text-right tabular-nums`}
+                                      >
+                                        {lb(pc.weight)}
+                                      </td>
+                                      <td
+                                        className={`${td} text-right tabular-nums ${skip("cost")}`}
+                                      >
+                                        {pc.cost ? money(pc.cost) : ""}
+                                      </td>
+                                      <td
+                                        className={`${td} ${skip("trucks")}`}
+                                      ></td>
+                                    </tr>
+                                  ))}
+                              </Fragment>
                             ))}
                             {plantTotals(d.items).map(([pl, c], k, all) => (
                               <tr
