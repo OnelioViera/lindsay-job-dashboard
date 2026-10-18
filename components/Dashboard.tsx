@@ -764,6 +764,12 @@ export default function Dashboard() {
               Order.
             </p>
           </div>
+          <Link
+            href="/logistics-all"
+            className="rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-white"
+          >
+            Combined logistics
+          </Link>
           <UserBadge />
           <button
             onClick={() => void getSupabase().auth.signOut()}
