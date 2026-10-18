@@ -195,6 +195,8 @@ function JobReport({
   today,
   scope,
   includePast,
+  expanded,
+  toggle,
 }: {
   job: Job;
   data: JobData;
@@ -202,6 +204,8 @@ function JobReport({
   today: string;
   scope: Scope;
   includePast: boolean;
+  expanded: Set<string>;
+  toggle: (key: string) => void;
 }) {
   const { items, r } = useMemo(
     () => prep(data, scope, includePast, today),
@@ -363,10 +367,27 @@ function JobReport({
                       <Fragment key={it.key}>
                         <tr className="border-b border-slate-200 text-xs">
                           <td className={`${td} pl-6`}>
+                            {it.pieces.length > 1 ? (
+                              <button
+                                onClick={() => toggle(`${job.id}|${it.key}`)}
+                                className="mr-1 inline-block w-4 text-left text-navy print:hidden"
+                                title="Show or hide the parts of this structure"
+                              >
+                                {expanded.has(`${job.id}|${it.key}`)
+                                  ? "▼"
+                                  : "▶"}
+                              </button>
+                            ) : null}
                             <span className="font-medium">{it.name}</span>
                             {it.description && it.pieces.length <= 1
                               ? ` — ${it.description}`
                               : ""}
+                            {it.pieces.length > 1 &&
+                              !expanded.has(`${job.id}|${it.key}`) && (
+                                <span className="ml-2 text-slate-500">
+                                  ({it.pieces.length} parts)
+                                </span>
+                              )}
                             {Object.keys(it.plants).length > 0 && (
                               <div className="mt-0.5 text-[11px] text-slate-600">
                                 {Object.entries(it.plants).map(([pl, v], k) => (
@@ -392,6 +413,7 @@ function JobReport({
                           </td>
                         </tr>
                         {it.pieces.length > 1 &&
+                          expanded.has(`${job.id}|${it.key}`) &&
                           it.pieces.map((pc, pi) => (
                             <tr
                               key={pi}
@@ -573,6 +595,25 @@ export default function LogisticsBundle() {
   const [cFrom, setCFrom] = useState("");
   const [cTo, setCTo] = useState("");
   const [includePast, setIncludePast] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("bundle-expanded");
+      if (v) setExpanded(new Set(JSON.parse(v)));
+    } catch {}
+  }, []);
+  const saveExpanded = (next: Set<string>) => {
+    setExpanded(next);
+    try {
+      localStorage.setItem("bundle-expanded", JSON.stringify([...next]));
+    } catch {}
+  };
+  const toggleOne = (key: string) => {
+    const next = new Set(expanded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    saveExpanded(next);
+  };
 
   useEffect(() => {
     try {
@@ -841,6 +882,35 @@ export default function LogisticsBundle() {
           )}
 
           <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
+            Structures with several parts
+          </h2>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <button
+              onClick={() => {
+                const all = new Set<string>();
+                for (const j of reportJobs)
+                  for (const i of prep(data[j.id], scope, includePast, today)
+                    .items)
+                    if (i.pieces.length > 1) all.add(`${j.id}|${i.key}`);
+                saveExpanded(all);
+              }}
+              className="rounded-md border border-navy px-3 py-1 font-semibold text-navy hover:bg-slate-50"
+            >
+              Expand all
+            </button>
+            <button
+              onClick={() => saveExpanded(new Set())}
+              className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50"
+            >
+              Collapse all
+            </button>
+            <span className="text-xs text-slate-500">
+              Or click the ▶ arrow next to a structure in the report below. What
+              is open is what prints.
+            </span>
+          </div>
+
+          <h2 className="mt-4 mb-2 text-sm font-semibold text-navy">
             What to print
           </h2>
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
@@ -881,6 +951,8 @@ export default function LogisticsBundle() {
             today={today}
             scope={scope}
             includePast={includePast}
+            expanded={expanded}
+            toggle={toggleOne}
           />
         ))}
 
