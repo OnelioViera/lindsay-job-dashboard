@@ -43,6 +43,25 @@ export default function NotReleased() {
   const [showDep, setShowDep] = useState(true);
   const [parts, setParts] = useState(true);
   const [out, setOut] = useState<Set<string>>(new Set());
+  // Same word list as the Shipping report (stored with its options) so both reports agree.
+  const [hideWords, setHideWords] = useState<string[]>([]);
+  const [wordIn, setWordIn] = useState("");
+  useEffect(() => {
+    try {
+      const o = JSON.parse(localStorage.getItem("shipping-opts") ?? "{}");
+      if (Array.isArray(o.hideWords)) setHideWords(o.hideWords);
+    } catch {}
+  }, []);
+  const saveWords = (w: string[]) => {
+    setHideWords(w);
+    try {
+      const o = JSON.parse(localStorage.getItem("shipping-opts") ?? "{}");
+      localStorage.setItem(
+        "shipping-opts",
+        JSON.stringify({ ...o, hideWords: w }),
+      );
+    } catch {}
+  };
 
   useEffect(() => {
     if (!jobId) return;
@@ -129,7 +148,7 @@ export default function NotReleased() {
         .filter((g) => g.ps.length > 0)
         .sort((a, b) => natural(a.structure, b.structure))
     );
-  }, [lines]);
+  }, [lines, hideWords]);
 
   const inc = groups.filter((g) => !out.has(g.structure));
   const flip = (k: string) => {
@@ -222,6 +241,68 @@ export default function NotReleased() {
           >
             Select none
           </button>
+        </div>
+        <div className="mt-3 text-sm">
+          <span className="font-semibold text-navy">
+            Hide lines containing:
+          </span>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {["Freight", "Joint Seal", "Crete Stik", "Joint Wrap", "Boot"]
+              .concat(
+                hideWords.filter(
+                  (w) =>
+                    ![
+                      "freight",
+                      "joint seal",
+                      "crete stik",
+                      "joint wrap",
+                      "boot",
+                    ].includes(w.toLowerCase()),
+                ),
+              )
+              .map((w) => {
+                const on = hideWords.some(
+                  (x) => x.toLowerCase() === w.toLowerCase(),
+                );
+                return (
+                  <button
+                    key={w}
+                    onClick={() =>
+                      saveWords(
+                        on
+                          ? hideWords.filter(
+                              (x) => x.toLowerCase() !== w.toLowerCase(),
+                            )
+                          : [...hideWords, w],
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                      on
+                        ? "border-navy bg-navy text-white"
+                        : "border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {on ? "✓ " : ""}
+                    {w}
+                  </button>
+                );
+              })}
+            <input
+              value={wordIn}
+              onChange={(e) => setWordIn(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && wordIn.trim()) {
+                  saveWords([...hideWords, wordIn.trim()]);
+                  setWordIn("");
+                }
+              }}
+              placeholder="Type a word + Enter"
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Shared with the Shipping report, so both show the same weights.
+          </p>
         </div>
         <p className="mt-2 text-xs text-slate-500">
           Untick a structure to leave it off the printout.{" "}
