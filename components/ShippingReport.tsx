@@ -63,6 +63,30 @@ export default function ShippingReport() {
   const [parts, setParts] = useState(true);
   const [skipMisc, setSkipMisc] = useState(false);
   const [note, setNote] = useState("");
+  // Structures / parts unticked here stay on screen (greyed) but are left off the printout.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!jobId) return;
+    try {
+      const v = localStorage.getItem(`shipping-excluded:${jobId}`);
+      setExcluded(new Set(v ? JSON.parse(v) : []));
+    } catch {}
+  }, [jobId]);
+  const saveExcluded = (next: Set<string>) => {
+    setExcluded(next);
+    try {
+      localStorage.setItem(
+        `shipping-excluded:${jobId}`,
+        JSON.stringify([...next]),
+      );
+    } catch {}
+  };
+  const flip = (key: string) => {
+    const next = new Set(excluded);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    saveExcluded(next);
+  };
 
   useEffect(() => {
     try {
@@ -131,39 +155,47 @@ export default function ShippingReport() {
   }, [jobId]);
 
   const groups = useMemo(() => {
-    const by = new Map<string, Line[]>();
+    const by = new Map<string, { l: Line; id: string }[]>();
+    const seen = new Map<string, number>();
     for (const l of lines) {
+      const n = seen.get(l.structure) ?? 0;
+      seen.set(l.structure, n + 1);
       // "Misc" = lines with no weight (freight charges, bill & hold, supplies).
       if (skipMisc && !(Number(l.weight) > 0)) continue;
-      (by.get(l.structure) ?? by.set(l.structure, []).get(l.structure)!).push(
-        l,
-      );
+      const arr = by.get(l.structure) ?? [];
+      arr.push({ l, id: `${l.structure}#${n}` });
+      by.set(l.structure, arr);
     }
+    const w = (xs: Line[]) =>
+      xs.reduce((n, x) => n + (Number(x.weight) || 0), 0);
     return [...by.entries()]
-      .map(([structure, ls]) => {
+      .map(([structure, all]) => {
+        // Only the parts that are ticked count toward the status and totals.
+        const ls = all.filter((x) => !excluded.has(x.id)).map((x) => x.l);
         const done = ls.filter(isShipped).length;
         const status: Status =
           done === 0 ? "not" : done === ls.length ? "shipped" : "partly";
-        const w = (xs: Line[]) =>
-          xs.reduce((n, x) => n + (Number(x.weight) || 0), 0);
         return {
           structure,
+          all,
           lines: ls,
           done,
           status,
+          out: excluded.has(structure) || ls.length === 0,
           weight: w(ls),
-          shippedWeight: w(ls.filter(isShipped)),
         };
       })
       .sort((a, b) => natural(a.structure, b.structure));
-  }, [lines, skipMisc]);
+  }, [lines, skipMisc, excluded]);
 
-  const count = (s: Status) => groups.filter((g) => g.status === s).length;
+  const inGroups = groups.filter((g) => !g.out);
+  const count = (s: Status) => inGroups.filter((g) => g.status === s).length;
   const weightOf = (s: Status) =>
-    groups.filter((g) => g.status === s).reduce((n, g) => n + g.weight, 0);
-  const shippedParts = groups.reduce((n, g) => n + g.done, 0);
-  const totalParts = groups.reduce((n, g) => n + g.lines.length, 0);
-  const shownGroups = groups.filter((g) => show[g.status]);
+    inGroups.filter((g) => g.status === s).reduce((n, g) => n + g.weight, 0);
+  const shippedParts = inGroups.reduce((n, g) => n + g.done, 0);
+  const totalParts = inGroups.reduce((n, g) => n + g.lines.length, 0);
+  const shownGroups = groups.filter((g) => g.out || show[g.status]);
+  const printable = inGroups.filter((g) => show[g.status]).length;
   const printedOn = new Date().toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -195,7 +227,7 @@ export default function ShippingReport() {
         </Link>
         <button
           onClick={() => window.print()}
-          disabled={shownGroups.length === 0}
+          disabled={printable === 0}
           className="rounded-md bg-brand-red px-4 py-2 text-sm font-semibold text-white hover:bg-brand-red-dark disabled:opacity-50"
         >
           Print / Save PDF
@@ -249,6 +281,30 @@ export default function ShippingReport() {
           Partly shipped structures always list their parts so the customer can
           see which pieces went and which are still to come.
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+          <span className="font-semibold text-navy">
+            Structures and parts to print:
+          </span>
+          <button
+            onClick={() => saveExcluded(new Set())}
+            className="rounded-md border border-navy px-3 py-1 font-semibold text-navy hover:bg-slate-50"
+          >
+            Select all
+          </button>
+          <button
+            onClick={() =>
+              saveExcluded(new Set(groups.map((g) => g.structure)))
+            }
+            className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50"
+          >
+            Select none
+          </button>
+          <span className="text-xs text-slate-500">
+            Tick the box beside a structure, or beside a single part, in the
+            list below. Unticked rows turn grey and are left off the printout
+            and the totals. {groups.filter((g) => g.out).length} left out.
+          </span>
+        </div>
         <label className="mt-3 block text-sm font-semibold text-navy">
           Note to the customer (printed under the summary)
           <textarea
@@ -314,10 +370,10 @@ export default function ShippingReport() {
                   <tr className="font-bold">
                     <td className={td}>All structures</td>
                     <td className={`${td} text-right tabular-nums`}>
-                      {groups.length}
+                      {inGroups.length}
                     </td>
                     <td className={`${td} text-right tabular-nums`}>
-                      {lb(groups.reduce((n, g) => n + g.weight, 0))}
+                      {lb(inGroups.reduce((n, g) => n + g.weight, 0))}
                     </td>
                   </tr>
                 </tbody>
@@ -335,6 +391,7 @@ export default function ShippingReport() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-navy text-white">
+                    <th className={`${th} w-8 print:hidden`}></th>
                     <th className={th}>Structure / description</th>
                     <th className={th}>UOM</th>
                     <th className={th}>Plant</th>
@@ -347,9 +404,20 @@ export default function ShippingReport() {
                 <tbody>
                   {shownGroups.map((g) => {
                     const open = parts || g.status === "partly";
+                    const hide = g.out ? "print:hidden opacity-40" : "";
                     return (
                       <Fragment key={g.structure}>
-                        <tr className="break-inside-avoid border-t-2 border-slate-400 bg-slate-100 font-semibold">
+                        <tr
+                          className={`break-inside-avoid border-t-2 border-slate-400 bg-slate-100 font-semibold ${hide}`}
+                        >
+                          <td className={`${td} print:hidden`}>
+                            <input
+                              type="checkbox"
+                              checked={!excluded.has(g.structure)}
+                              onChange={() => flip(g.structure)}
+                              title="Include this structure in the printout"
+                            />
+                          </td>
                           <td className={td} colSpan={5}>
                             {g.structure}
                             <span
@@ -367,15 +435,24 @@ export default function ShippingReport() {
                           <td className={td}></td>
                         </tr>
                         {open &&
-                          g.lines.map((l, i) => {
+                          g.all.map(({ l, id }) => {
                             const done = isShipped(l);
+                            const off = g.out || excluded.has(id);
                             return (
                               <tr
-                                key={i}
+                                key={id}
                                 className={`border-b border-slate-200 text-xs ${
                                   done ? "" : "text-slate-500"
-                                }`}
+                                } ${off ? "print:hidden opacity-40" : ""}`}
                               >
+                                <td className={`${td} print:hidden`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!excluded.has(id)}
+                                    onChange={() => flip(id)}
+                                    title="Include this part in the printout"
+                                  />
+                                </td>
                                 <td className={`${td} pl-6`}>
                                   {l.description || "(part)"}
                                 </td>
