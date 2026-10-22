@@ -165,7 +165,7 @@ export default function ShippingReport() {
     for (const l of lines) {
       // A line with no unit of measure is the structure's description
       // (e.g. 60"ID Storm Manhole), not a part that gets delivered.
-      if (!(l.uom ?? "").trim()) {
+      if (!(l.uom ?? "").trim() || !(l.description ?? "").trim()) {
         const d = (l.description ?? "").trim();
         if (d && !descs.has(l.structure)) descs.set(l.structure, d);
         continue;
