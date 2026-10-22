@@ -161,7 +161,15 @@ export default function ShippingReport() {
   const groups = useMemo(() => {
     const by = new Map<string, { l: Line; id: string }[]>();
     const seen = new Map<string, number>();
+    const descs = new Map<string, string>();
     for (const l of lines) {
+      // A line with no unit of measure is the structure's description
+      // (e.g. 60"ID Storm Manhole), not a part that gets delivered.
+      if (!(l.uom ?? "").trim()) {
+        const d = (l.description ?? "").trim();
+        if (d && !descs.has(l.structure)) descs.set(l.structure, d);
+        continue;
+      }
       const n = seen.get(l.structure) ?? 0;
       seen.set(l.structure, n + 1);
       // "Misc" = lines with no weight (freight charges, bill & hold, supplies).
@@ -183,6 +191,7 @@ export default function ShippingReport() {
           done === 0 ? "not" : done === ls.length ? "shipped" : "partly";
         return {
           structure,
+          desc: descs.get(structure) ?? "",
           all,
           lines: ls,
           done,
@@ -499,6 +508,11 @@ export default function ShippingReport() {
                           </td>
                           <td className={td} colSpan={5}>
                             {g.structure}
+                            {g.desc && (
+                              <span className="ml-2 text-xs font-normal text-slate-600">
+                                {g.desc}
+                              </span>
+                            )}
                             <span
                               className={`ml-3 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COLOR[g.status]}`}
                             >
