@@ -644,6 +644,15 @@ export default function Dashboard() {
               Shipping report
             </Link>
           )}
+          {m && (
+            <Link
+              href={withJob("/not-released", metricsJob.id)}
+              onClick={() => rememberJob(metricsJob.id)}
+              className="mt-2 block rounded-lg border-2 border-navy px-3 py-2 text-center text-sm font-semibold text-navy hover:bg-slate-50"
+            >
+              Not released report
+            </Link>
+          )}
         </div>
         <p className="border-t border-slate-200 p-3 text-xs text-slate-500">
           Counts are structures (a structure counts once). Based on the last
