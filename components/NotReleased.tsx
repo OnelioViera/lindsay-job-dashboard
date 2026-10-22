@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { jobLine, useActiveJob, withJob } from "@/lib/jobs";
-import { hasExtPrice } from "@/lib/priceColumn";
+import { hasDeliveredCols, hasExtPrice } from "@/lib/priceColumn";
 import UserBadge from "./UserBadge";
 
 type Line = {
@@ -17,6 +17,9 @@ type Line = {
   plant_id: string | null;
   production_dep: string | null;
   sch_date: string | null;
+  pick_date: string | null;
+  picked?: boolean | null;
+  invoice_date?: string | null;
   weight: number | null;
   ext_price?: number | null;
 };
@@ -61,14 +64,16 @@ export default function NotReleased() {
     (async () => {
       const sb = getSupabase();
       const p = await hasExtPrice();
+      const d = await hasDeliveredCols();
       setHasPrice(p);
       const all: Line[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error: e } = await sb
           .from("titan_lines")
           .select(
-            "structure, description, uom, plant_id, production_dep, sch_date, weight" +
-              (p ? ", ext_price" : ""),
+            "structure, description, uom, plant_id, production_dep, sch_date, pick_date, weight" +
+              (p ? ", ext_price" : "") +
+              (d ? ", picked, invoice_date" : ""),
           )
           .eq("job_id", jobId)
           .order("sort_order")
@@ -96,25 +101,34 @@ export default function NotReleased() {
       a.push(l);
       by.set(l.structure, a);
     }
-    return [...by.entries()]
-      .filter(([, ls]) => !ls.some((l) => l.sch_date))
-      .map(([structure, ls]) => {
-        const desc =
-          ls.find((l) => !(l.uom ?? "").trim() && (l.description ?? "").trim())
-            ?.description ?? "";
-        const ps = ls.filter(
-          (l) => (l.uom ?? "").trim() && (l.description ?? "").trim(),
-        );
-        return {
-          structure,
-          desc,
-          ps,
-          weight: ps.reduce((n, x) => n + (Number(x.weight) || 0), 0),
-          price: ps.reduce((n, x) => n + (Number(x.ext_price) || 0), 0),
-        };
-      })
-      .filter((g) => g.ps.length > 0)
-      .sort((a, b) => natural(a.structure, b.structure));
+    return (
+      [...by.entries()]
+        // Released = scheduled to pour, or already picked / invoiced / given a pick date.
+        .filter(
+          ([, ls]) =>
+            !ls.some(
+              (l) => l.sch_date || l.pick_date || l.picked || l.invoice_date,
+            ),
+        )
+        .map(([structure, ls]) => {
+          const desc =
+            ls.find(
+              (l) => !(l.uom ?? "").trim() && (l.description ?? "").trim(),
+            )?.description ?? "";
+          const ps = ls.filter(
+            (l) => (l.uom ?? "").trim() && (l.description ?? "").trim(),
+          );
+          return {
+            structure,
+            desc,
+            ps,
+            weight: ps.reduce((n, x) => n + (Number(x.weight) || 0), 0),
+            price: ps.reduce((n, x) => n + (Number(x.ext_price) || 0), 0),
+          };
+        })
+        .filter((g) => g.ps.length > 0)
+        .sort((a, b) => natural(a.structure, b.structure))
+    );
   }, [lines]);
 
   const inc = groups.filter((g) => !out.has(g.structure));
