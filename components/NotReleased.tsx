@@ -46,6 +46,15 @@ export default function NotReleased() {
   // Same word list as the Shipping report (stored with its options) so both reports agree.
   const [hideWords, setHideWords] = useState<string[]>([]);
   const [wordIn, setWordIn] = useState("");
+  // Collapsed structures show only their header row (on screen and on the printout).
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleOpen = (k: string) =>
+    setCollapsed((c) => {
+      const n = new Set(c);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
   useEffect(() => {
     try {
       const o = JSON.parse(localStorage.getItem("shipping-opts") ?? "{}");
@@ -134,9 +143,12 @@ export default function NotReleased() {
             ls.find(
               (l) => !(l.uom ?? "").trim() && (l.description ?? "").trim(),
             )?.description ?? "";
-          const ps = ls.filter(
-            (l) => (l.uom ?? "").trim() && (l.description ?? "").trim(),
-          );
+          const ps = ls.filter((l) => {
+            if (!(l.uom ?? "").trim() || !(l.description ?? "").trim())
+              return false;
+            const hay = `${structure} ${l.description}`.toLowerCase();
+            return !hideWords.some((w) => hay.includes(w.toLowerCase()));
+          });
           return {
             structure,
             desc,
@@ -229,6 +241,20 @@ export default function NotReleased() {
               Show ExtPrice
             </label>
           )}
+          <button
+            onClick={() =>
+              setCollapsed(new Set(groups.map((g) => g.structure)))
+            }
+            className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50"
+          >
+            Collapse all
+          </button>
+          <button
+            onClick={() => setCollapsed(new Set())}
+            className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50"
+          >
+            Expand all
+          </button>
           <button
             onClick={() => saveOut(new Set())}
             className="rounded-md border border-navy px-3 py-1 font-semibold text-navy hover:bg-slate-50"
@@ -366,6 +392,13 @@ export default function NotReleased() {
                           />
                         </td>
                         <td className={td} colSpan={2 + (showDep ? 2 : 1)}>
+                          <button
+                            onClick={() => toggleOpen(g.structure)}
+                            className="mr-2 inline-block w-4 text-slate-500 print:hidden"
+                            title="Collapse / expand this structure"
+                          >
+                            {collapsed.has(g.structure) ? "▸" : "▾"}
+                          </button>
                           {g.structure}
                           {g.desc && (
                             <span className="ml-2 text-xs font-normal text-slate-600">
@@ -383,6 +416,7 @@ export default function NotReleased() {
                         )}
                       </tr>
                       {parts &&
+                        !collapsed.has(g.structure) &&
                         g.ps.map((l, i) => (
                           <tr
                             key={i}
