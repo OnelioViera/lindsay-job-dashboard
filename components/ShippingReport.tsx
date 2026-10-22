@@ -62,6 +62,9 @@ export default function ShippingReport() {
   });
   const [parts, setParts] = useState(true);
   const [skipMisc, setSkipMisc] = useState(false);
+  // Lines whose structure or description contains any of these words are left out.
+  const [hideWords, setHideWords] = useState<string[]>([]);
+  const [wordIn, setWordIn] = useState("");
   const [note, setNote] = useState("");
   // Structures / parts unticked here stay on screen (greyed) but are left off the printout.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
@@ -96,6 +99,7 @@ export default function ShippingReport() {
         if (o.show) setShow((s) => ({ ...s, ...o.show }));
         if (typeof o.parts === "boolean") setParts(o.parts);
         if (typeof o.skipMisc === "boolean") setSkipMisc(o.skipMisc);
+        if (Array.isArray(o.hideWords)) setHideWords(o.hideWords);
       }
     } catch {}
   }, []);
@@ -103,10 +107,10 @@ export default function ShippingReport() {
     try {
       localStorage.setItem(
         "shipping-opts",
-        JSON.stringify({ show, parts, skipMisc }),
+        JSON.stringify({ show, parts, skipMisc, hideWords }),
       );
     } catch {}
-  }, [show, parts, skipMisc]);
+  }, [show, parts, skipMisc, hideWords]);
   useEffect(() => {
     if (!jobId) return;
     try {
@@ -162,6 +166,8 @@ export default function ShippingReport() {
       seen.set(l.structure, n + 1);
       // "Misc" = lines with no weight (freight charges, bill & hold, supplies).
       if (skipMisc && !(Number(l.weight) > 0)) continue;
+      const hay = `${l.structure} ${l.description ?? ""}`.toLowerCase();
+      if (hideWords.some((w) => hay.includes(w.toLowerCase()))) continue;
       const arr = by.get(l.structure) ?? [];
       arr.push({ l, id: `${l.structure}#${n}` });
       by.set(l.structure, arr);
@@ -186,7 +192,7 @@ export default function ShippingReport() {
         };
       })
       .sort((a, b) => natural(a.structure, b.structure));
-  }, [lines, skipMisc, excluded]);
+  }, [lines, skipMisc, excluded, hideWords]);
 
   const inGroups = groups.filter((g) => !g.out);
   const count = (s: Status) => inGroups.filter((g) => g.status === s).length;
@@ -276,6 +282,79 @@ export default function ShippingReport() {
             />
             Leave out lines with no weight (freight, supplies)
           </label>
+        </div>
+        <div className="mt-3 text-sm">
+          <span className="font-semibold text-navy">
+            Hide lines containing:
+          </span>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {["Freight", "Joint Seal", "Crete Stik", "Joint Wrap", "Boot"].map(
+              (w) => {
+                const on = hideWords.some(
+                  (x) => x.toLowerCase() === w.toLowerCase(),
+                );
+                return (
+                  <button
+                    key={w}
+                    onClick={() =>
+                      setHideWords(
+                        on
+                          ? hideWords.filter(
+                              (x) => x.toLowerCase() !== w.toLowerCase(),
+                            )
+                          : [...hideWords, w],
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                      on
+                        ? "border-navy bg-navy text-white"
+                        : "border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    {on ? "✓ " : ""}
+                    {w}
+                  </button>
+                );
+              },
+            )}
+            {hideWords
+              .filter(
+                (w) =>
+                  ![
+                    "freight",
+                    "joint seal",
+                    "crete stik",
+                    "joint wrap",
+                    "boot",
+                  ].includes(w.toLowerCase()),
+              )
+              .map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setHideWords(hideWords.filter((x) => x !== w))}
+                  className="rounded-full border border-navy bg-navy px-3 py-1 text-xs font-semibold text-white"
+                  title="Click to remove"
+                >
+                  ✓ {w} ✕
+                </button>
+              ))}
+            <input
+              value={wordIn}
+              onChange={(e) => setWordIn(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && wordIn.trim()) {
+                  setHideWords([...hideWords, wordIn.trim()]);
+                  setWordIn("");
+                }
+              }}
+              placeholder="Type a word + Enter"
+              className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Matching lines (and a structure named that, like “Freight”) are
+            removed from the screen, the printout and the totals.
+          </p>
         </div>
         <p className="mt-1 text-xs text-slate-500">
           Partly shipped structures always list their parts so the customer can
